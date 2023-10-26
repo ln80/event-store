@@ -1,4 +1,4 @@
-package json
+package avro
 
 import (
 	"context"
@@ -10,29 +10,36 @@ import (
 )
 
 func BenchmarkSerializer(b *testing.B) {
-	testutil.RegisterEvent("")
+	type Container struct {
+		E1 *testutil.Event1
+		E2 *testutil.Event2
+	}
 
-	ser := NewEventSerializer("")
+	ser := NewEventSerializer[Container]("")
 	test_suite.BenchmarkSerializer(b, ser)
 }
 
 func TestSerializer(t *testing.T) {
+	type Container struct {
+		E1 *testutil.Event1
+		E2 *testutil.Event2
+	}
+
 	ctx := context.Background()
 
-	// Note register event is mandatory for json serializer
-
 	t.Run("with namespace", func(t *testing.T) {
-		testutil.RegisterEvent("service1")
+		ctx = context.WithValue(ctx, event.ContextNamespaceKey, "service1")
 
-		ctx := context.WithValue(ctx, event.ContextNamespaceKey, "service1")
-		ser := NewEventSerializer("service1")
+		ser := NewEventSerializer[Container]("service1")
+
 		test_suite.TestSerializer(t, ctx, ser)
 	})
 
 	t.Run("without namespace", func(t *testing.T) {
 		testutil.RegisterEvent("")
 
-		ser := NewEventSerializer("")
+		ser := NewEventSerializer[Container]("")
+
 		test_suite.TestSerializer(t, ctx, ser)
 	})
 }

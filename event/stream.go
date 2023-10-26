@@ -3,6 +3,7 @@ package event
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -17,6 +18,8 @@ var (
 	ErrCursorNotFound  = errors.New("cursor not found")
 	ErrInvalidCursor   = errors.New("invalid cursor")
 )
+
+var streamIDRegex = regexp.MustCompile("^[a-zA-Z0-9-_+]+$")
 
 // StreamID presents a composed event stream ID, the global part identifies the global stream ex: TenantID.
 // While the other parts can identify the service, bounded context, or the root entity, etc
@@ -46,19 +49,40 @@ func (si StreamID) Parts() []string {
 	return si.parts
 }
 
+func validateStreamID(streamID StreamID) error {
+	if !streamIDRegex.MatchString(streamID.global) {
+		return fmt.Errorf("%w: %s", ErrInvalidStreamID, streamID)
+	}
+	for _, p := range streamID.parts {
+		if !streamIDRegex.MatchString(p) {
+			return fmt.Errorf("%w: %s", ErrInvalidStreamID, streamID)
+		}
+	}
+	return nil
+}
+
 // NewStreamID returns a composed event stream ID.
-// It panics if the global part is empty or parts (global included) contain the stream id delimiter's character.
+// It panics if the global stream ID or parts are not alphanumeric,"-","_","+"
 func NewStreamID(global string, parts ...string) StreamID {
-	if global == "" ||
-		strings.Contains(global, StreamIDPartsDelimiter) ||
-		strings.Contains(strings.Join(parts, ""), StreamIDPartsDelimiter) {
-		panic(ErrInvalidStreamID)
+	streamID, err := newStreamID(global, parts...)
+	if err != nil {
+		panic(err)
 	}
 
-	return StreamID{
+	return streamID
+}
+
+func newStreamID(global string, parts ...string) (StreamID, error) {
+	streamID := StreamID{
 		global: global,
 		parts:  parts,
 	}
+
+	if err := validateStreamID(streamID); err != nil {
+		return StreamID{}, err
+	}
+
+	return streamID, nil
 }
 
 func ParseStreamID(streamID string) (StreamID, error) {
@@ -67,7 +91,7 @@ func ParseStreamID(streamID string) (StreamID, error) {
 	}
 	splits := strings.Split(streamID, StreamIDPartsDelimiter)
 
-	return NewStreamID(splits[0], splits[1:]...), nil
+	return newStreamID(splits[0], splits[1:]...)
 }
 
 // Stream presents a collection of consecutive events

@@ -36,7 +36,7 @@ func TestRegister(t *testing.T) {
 		t.Fatal("expected err be nil, got", err)
 	}
 
-	// only Event2 is registred in global register
+	// only Event2 is registered in global register
 	globReg := NewRegister("")
 	globReg.
 		Set(&testutil.Event2{})
@@ -104,7 +104,7 @@ func TestRegister_Convert(t *testing.T) {
 	}
 
 	// case error
-	// try to convert an event that is not registred in the global registry
+	// try to convert an event that is not registered in the global registry
 	// must returns a not found error
 	evt2 := Event2{Val: "2"}
 	_, err = NewRegister(namespace).Convert(evt2)

@@ -11,7 +11,7 @@ import (
 )
 
 func EventStoreTest(t *testing.T, ctx context.Context, store event.Store) {
-	t.Run("basic operations", func(t *testing.T) {
+	t.Run("event logging basic operations", func(t *testing.T) {
 		streamID := event.NewStreamID(event.UID().String())
 		// test append events to stream
 		envs := event.Wrap(ctx, streamID, testutil.GenEvents(10))
@@ -63,7 +63,7 @@ func EventStoreTest(t *testing.T, ctx context.Context, store event.Store) {
 		}
 	})
 
-	t.Run("with expired events", func(t *testing.T) {
+	t.Run("event logging with expired events", func(t *testing.T) {
 		streamID := event.NewStreamID(event.UID().String())
 
 		// test append events to stream

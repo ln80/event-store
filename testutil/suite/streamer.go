@@ -57,7 +57,7 @@ func EventStreamerSuite(t *testing.T, ctx context.Context, store interface {
 	}
 	opt.PostAppend(streamID2)
 
-	t.Run("basic", func(t *testing.T) {
+	t.Run("streamer basic", func(t *testing.T) {
 
 		events := make([]event.Envelope, 0)
 		q := event.StreamerQuery{}
@@ -97,6 +97,11 @@ func EventStreamerSuite(t *testing.T, ctx context.Context, store interface {
 				t.Fatalf("expect events count be %d, got %d", want, l)
 			}
 
+			// TBD wether or not support version prior to go.1.23.10
+			// sort.Slice(descEvents, func(a, b int) bool {
+			// 	return descEvents[a].GlobalVersion().Compare(descEvents[b].GlobalVersion()) >= 0
+			// })
+
 			slices.SortFunc(descEvents, func(a, b event.Envelope) int {
 				return a.GlobalVersion().Compare(b.GlobalVersion())
 			})
@@ -109,7 +114,7 @@ func EventStreamerSuite(t *testing.T, ctx context.Context, store interface {
 		}
 	})
 
-	t.Run("with_limit", func(t *testing.T) {
+	t.Run("streamer with limit", func(t *testing.T) {
 		// get first record events
 		firstRecordEvents := make([]event.Envelope, 0)
 		q := event.StreamerQuery{
@@ -154,7 +159,7 @@ func EventStreamerSuite(t *testing.T, ctx context.Context, store interface {
 		}
 	})
 
-	t.Run("advanced", func(t *testing.T) {
+	t.Run("streamer advanced", func(t *testing.T) {
 
 		events := make([]event.Envelope, 0)
 		q := event.StreamerQuery{
@@ -186,6 +191,5 @@ func EventStreamerSuite(t *testing.T, ctx context.Context, store interface {
 				t.Fatalf("expect events count be %d, got %d", want, l)
 			}
 		}
-
 	})
 }

@@ -11,7 +11,7 @@ import (
 )
 
 func EventSourcingStoreTest(t *testing.T, ctx context.Context, store sourcing.Store) {
-	t.Run("basic operations", func(t *testing.T) {
+	t.Run("event sourcing basic operations", func(t *testing.T) {
 		streamID := event.NewStreamID(event.UID().String())
 
 		// append events to stream with invalid current version of the stream
