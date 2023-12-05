@@ -15,8 +15,8 @@ Metadata:
     Description: Elastic Event Store on top of DynamoDB
     Author: Reda Laanait
     SpdxLicenseId: MIT
-    LicenseUrl: LICENSE.txt
-    ReadmeUrl: README.md
+    LicenseUrl: ../../LICENSE.txt
+    ReadmeUrl: ../../README.md
     Labels: ['event-store', 'event-sourcing', 'ddd', 'dynamodb', 'serverless', 'go']
     HomePageUrl: https://github.com/ln80/event-store
     SemanticVersion: 0.0.1

@@ -41,7 +41,7 @@ func awsConfig(endpoint string) (cfg aws.Config, err error) {
 }
 
 func makeRecord(ser event.Serializer, globalID string, envs []event.Envelope) Record {
-	chunk, _, _ := ser.MarshalEventBatch(envs)
+	chunk, _, _ := ser.MarshalEventBatch(context.TODO(), envs)
 	t := envs[len(envs)-1].At()
 	id := event.NewStreamID(globalID)
 

@@ -16,7 +16,6 @@ import (
 	"github.com/ln80/event-store/event"
 	"github.com/ln80/event-store/stack/elastic/utils"
 	"github.com/ln80/event-store/testutil"
-	test_suite "github.com/ln80/event-store/testutil/suite"
 )
 
 func init() {
@@ -70,13 +69,13 @@ func TestIntegration(t *testing.T) {
 	store := dynamodb.NewEventStore(utils.InitDynamodbClient(cfg), table)
 
 	// test event-logging use cases
-	test_suite.EventStoreTest(t, ctx, store)
+	testutil.TestEventLoggingStore(t, ctx, store)
 
 	// test event-sourcing use cases
-	test_suite.EventSourcingStoreTest(t, ctx, store)
+	testutil.TestEventSourcingStore(t, ctx, store)
 
 	// test replay the global stream use cases
-	test_suite.EventStreamerSuite(t, ctx, store, func(opt *test_suite.EventStreamerSuiteOptions) {
+	testutil.TestEventStreamer(t, ctx, store, func(opt *testutil.TestEventStreamerOptions) {
 		// wait for global stream indexing (asynchronous)
 		opt.PostAppend = func(id event.StreamID) {
 			time.Sleep(1 * time.Second)

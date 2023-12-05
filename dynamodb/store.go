@@ -322,7 +322,7 @@ func (s *Store) doAppend(ctx context.Context, id event.StreamID, ver *event.Vers
 		}
 	}
 
-	b, n, err := s.Serializer.MarshalEventBatch(events)
+	b, n, err := s.Serializer.MarshalEventBatch(ctx, events)
 	if err != nil {
 		return event.Err(event.ErrAppendEventsFailed, id.String(), err)
 	}
@@ -448,7 +448,7 @@ func (s *Store) doLoad(ctx context.Context, id event.StreamID, from, to string) 
 	// unmarshal records' events
 	envs := []event.Envelope{}
 	for _, rec := range records {
-		chunk, err := s.Serializer.UnmarshalEventBatch(rec.Events)
+		chunk, err := s.Serializer.UnmarshalEventBatch(ctx, rec.Events)
 		if err != nil {
 			return nil, event.Err(event.ErrLoadEventFailed, id.String(), err)
 		}
@@ -524,7 +524,7 @@ PAGE_LOOP:
 				continue PAGE_LOOP
 			}
 
-			envs, err := s.Serializer.UnmarshalEventBatch(rec.Events)
+			envs, err := s.Serializer.UnmarshalEventBatch(ctx, rec.Events)
 			if err != nil {
 				return event.Err(event.ErrLoadEventFailed, id.String(), err)
 			}

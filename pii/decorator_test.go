@@ -8,7 +8,6 @@ import (
 	"github.com/ln80/event-store/memory"
 	"github.com/ln80/event-store/testutil"
 
-	test_suite "github.com/ln80/event-store/testutil/suite"
 	"github.com/ln80/pii"
 	pii_memory "github.com/ln80/pii/memory"
 )
@@ -28,7 +27,7 @@ func TestPIIProtectWrapper(t *testing.T) {
 
 	store = ProtectPII(store, pf)
 
-	test_suite.EventStoreTest(t, ctx, store)
-	test_suite.EventSourcingStoreTest(t, ctx, store)
-	test_suite.EventStreamerSuite(t, ctx, store)
+	testutil.TestEventLoggingStore(t, ctx, store)
+	testutil.TestEventSourcingStore(t, ctx, store)
+	testutil.TestEventStreamer(t, ctx, store)
 }

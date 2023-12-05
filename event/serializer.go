@@ -1,6 +1,7 @@
 package event
 
 import (
+	"context"
 	"errors"
 )
 
@@ -14,17 +15,17 @@ var (
 type Serializer interface {
 
 	// MarshalEvent returns a binary version of the event and its size according to the supported format.
-	MarshalEvent(event Envelope) ([]byte, int, error)
+	MarshalEvent(ctx context.Context, event Envelope) ([]byte, int, error)
 
 	// MarshalEventBatch returns a binary version of the given chunk of events. It also returns a slice of events' size.
 	// It fails if chunk is empty.
-	MarshalEventBatch(events []Envelope) ([]byte, []int, error)
+	MarshalEventBatch(ctx context.Context, events []Envelope) ([]byte, []int, error)
 
 	// UnmarshalEvent returns an event envelope based on the binary/raw given event.
 	// The returned envelope might be nil in case the event type if not found in the registry.
-	UnmarshalEvent(b []byte) (Envelope, error)
+	UnmarshalEvent(ctx context.Context, b []byte) (Envelope, error)
 
 	// UnmarshalEvent returns a slice of envelopes based on the binary given chunk of events.
 	// Similarly to UnmarshalEvent, events might be nil if event type is not found in the registry.
-	UnmarshalEventBatch(b []byte) ([]Envelope, error)
+	UnmarshalEventBatch(ctx context.Context, b []byte) ([]Envelope, error)
 }

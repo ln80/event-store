@@ -1,48 +1,23 @@
 package avro
 
 import (
-	"errors"
 	"log"
-	"reflect"
 	"time"
 
 	"github.com/ln80/event-store/event"
 )
 
-func convertEvent[T any](evt event.Envelope) (to *avroEvent[T], err error) {
-	to, ok := evt.(*avroEvent[T])
+func convertEvent(evt event.Envelope) (to *avroEvent, err error) {
+	to, ok := evt.(*avroEvent)
 	if ok {
 		return
 	}
 
-	val := evt.Event()
-	var C T
-	cv := reflect.ValueOf(&C).Elem()
-	if cv.Kind() != reflect.Struct {
-		return nil, errors.New("invalid event container type, it must be a struct")
-	}
-	isSet := false
-	for i := 0; i < cv.NumField(); i++ {
-		field := cv.Field(i)
-		if field.CanSet() {
-			vv := reflect.ValueOf(val)
-			if field.Type().AssignableTo(vv.Type()) {
-				field.Set(vv)
-				isSet = true
-				break
-			}
-		}
-	}
-	if !isSet {
-		err = errors.New("failed to set event in a container's field")
-		return
-	}
-
-	to = &avroEvent[T]{
+	to = &avroEvent{
 		FStreamID: evt.StreamID(),
 		FID:       evt.ID(),
 		FType:     evt.Type(),
-		FRawEvent: C,
+		FRawEvent: evt.Event(),
 		FAt:       evt.At().UnixNano(),
 		FUser:     evt.User(),
 		FDests:    evt.Dests(),
@@ -60,7 +35,7 @@ func convertEvent[T any](evt event.Envelope) (to *avroEvent[T], err error) {
 	return
 }
 
-type avroEvent[T any] struct {
+type avroEvent struct {
 	FStreamID         string `avro:"StmID"`
 	fGlobalStreamID   string `avro:"-"`
 	FRawGlobalVersion string `avro:"GVer"`
@@ -69,42 +44,22 @@ type avroEvent[T any] struct {
 	fVersion          event.Version
 	FID               string        `avro:"ID"`
 	FType             string        `avro:"Type"`
-	FRawEvent         T             `avro:"Data"`
+	FRawEvent         any           `avro:"Data" schema:"union"`
 	fEvent            any           `avro:"-"`
 	FAt               int64         `avro:"At"`
 	FUser             string        `avro:"User"`
 	FDests            []string      `avro:"Dests"`
 	FTTL              time.Duration `avro:"TTL"`
-
-	namespace string `avro:"-"`
 }
 
-var _ event.Envelope = &avroEvent[any]{}
+var _ event.Envelope = &avroEvent{}
 
-func (e *avroEvent[T]) Event() any {
+func (e *avroEvent) Event() any {
 	if e.fEvent != nil {
 		return e.fEvent
 	}
 
-	// TODO add cache to avoid the recurrent reflection logic
-
-	cv := reflect.ValueOf(e.FRawEvent)
-
-	if cv.Kind() == reflect.Struct {
-		for i := 0; i < cv.NumField(); i++ {
-			field := cv.Field(i)
-			if !field.CanInterface() {
-				continue
-			}
-
-			fieldType := event.NormalizeTypeWithNamespace(e.namespace, field.Type())
-
-			if fieldType == e.Type() {
-				e.fEvent = field.Interface()
-				break
-			}
-		}
-	}
+	e.fEvent = e.FRawEvent
 
 	if e.fEvent == nil {
 		log.Println("[WARNING] Unmarshal event data has failed")
@@ -113,23 +68,23 @@ func (e *avroEvent[T]) Event() any {
 	return e.fEvent
 }
 
-func (e *avroEvent[T]) StreamID() string {
+func (e *avroEvent) StreamID() string {
 	return e.FStreamID
 }
 
-func (e *avroEvent[T]) ID() string {
+func (e *avroEvent) ID() string {
 	return e.FID
 }
 
-func (e *avroEvent[T]) Type() string {
+func (e *avroEvent) Type() string {
 	return e.FType
 }
 
-func (e *avroEvent[T]) At() time.Time {
+func (e *avroEvent) At() time.Time {
 	return time.Unix(0, e.FAt)
 }
 
-func (e *avroEvent[T]) Version() event.Version {
+func (e *avroEvent) Version() event.Version {
 	if !e.fVersion.IsZero() {
 		return e.fVersion
 	}
@@ -139,11 +94,11 @@ func (e *avroEvent[T]) Version() event.Version {
 	return e.fVersion
 }
 
-func (e *avroEvent[T]) User() string {
+func (e *avroEvent) User() string {
 	return e.FUser
 }
 
-func (e *avroEvent[T]) GlobalStreamID() string {
+func (e *avroEvent) GlobalStreamID() string {
 	if e.fGlobalStreamID == "" {
 		stmID, _ := event.ParseStreamID(e.FStreamID)
 		e.fGlobalStreamID = stmID.GlobalID()
@@ -151,7 +106,7 @@ func (e *avroEvent[T]) GlobalStreamID() string {
 	return e.fGlobalStreamID
 }
 
-func (e *avroEvent[T]) GlobalVersion() event.Version {
+func (e *avroEvent) GlobalVersion() event.Version {
 	if !e.fGlobalVersion.IsZero() {
 		return e.fGlobalVersion
 	}
@@ -161,23 +116,23 @@ func (e *avroEvent[T]) GlobalVersion() event.Version {
 	return e.fGlobalVersion
 }
 
-func (e *avroEvent[T]) Dests() []string {
+func (e *avroEvent) Dests() []string {
 	return e.FDests
 }
 
-func (e *avroEvent[T]) TTL() time.Duration {
+func (e *avroEvent) TTL() time.Duration {
 	return e.FTTL
 }
 
-func (e *avroEvent[T]) SetGlobalVersion(v event.Version) event.Envelope {
+func (e *avroEvent) SetGlobalVersion(v event.Version) event.Envelope {
 	e.fGlobalVersion = v
 	e.FRawGlobalVersion = e.fGlobalVersion.String()
 	return e
 }
 
-var _ event.Transformer = &avroEvent[any]{}
+var _ event.Transformer = &avroEvent{}
 
-func (e *avroEvent[T]) Transform(fn func(any) any) {
+func (e *avroEvent) Transform(fn func(any) any) {
 	if e.Event() != nil {
 		e.fEvent = fn(e.fEvent)
 	}

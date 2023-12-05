@@ -3,6 +3,7 @@ package dynamodb
 import (
 	"context"
 	"errors"
+	"log"
 	"sync"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -41,10 +42,11 @@ type indexer struct {
 	mu    sync.RWMutex
 }
 
-// NewIndexer returns a dynamodb global stream indexer. It keeps track of the global stream current version
-// and increments sequence accordingly.
+// NewIndexer returns a dynamodb global stream indexer.
+// It keeps track of the global stream current version and increments sequence accordingly.
 // Indexer has an in-memory cache that works effectively only if the instance receives
-// records that belong to the same global stream, otherwise the cache is cleared and synced with the new global stream current state.
+// records that belong to the same global stream, otherwise the cache is cleared and
+// synced with the new global stream current state.
 //
 // Note that Dynamodb change stream Lambda source mapper allows the use of a such cache mechanism:
 // It does not concurrently distribute a partition-related events to different Lambda instances.
@@ -81,6 +83,7 @@ func (i *indexer) getCache(id string) *indexerCache {
 	defer i.mu.Unlock()
 
 	if i.cache.globalID != id {
+		log.Println("global stream indexing cache changed", i.cache.globalID, id)
 		i.cache = &indexerCache{
 			globalID: id,
 		}
@@ -98,6 +101,7 @@ func (i *indexer) setCache(cache *indexerCache) {
 
 func (i *indexer) Index(ctx context.Context, rec Record) (err error) {
 	// do not skip empty record; this might be error-prone
+	// this logic is subject to change...
 	if len(rec.Events) == 0 {
 		return event.Err(ErrIndexingRecordFailed, "empty record: "+rec.HashKey+" "+rec.RangeKey)
 	}
@@ -191,8 +195,7 @@ func (i *indexer) Index(ctx context.Context, rec Record) (err error) {
 		currentGVer = currentGVer.Incr()
 	}
 
-	// If's not a retry then update the record global version
-	// Not that record events' global versions are not persisted
+	// If it's not a retry then update the record's global version
 	if !isRetry {
 		expr, _ := expression.
 			NewBuilder().

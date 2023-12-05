@@ -35,11 +35,7 @@ type Event2 struct {
 	ID         string `pii:"subjectID"`
 	Val        string `pii:"data"`
 	LongText   string
-	MediumText string
-
-	ExtraField1 string
-	ExtraField2 string
-	ExtraField3 string
+	MediumText string `aliases:"Medium"`
 }
 
 func (e *Event2) EvDests() []string {
@@ -60,10 +56,6 @@ func GenEvents(count int) []any {
 				LongText: generateRandomText(100),
 
 				MediumText: generateRandomText(50),
-
-				ExtraField1: generateRandomText(10),
-				ExtraField2: generateRandomText(10),
-				ExtraField3: generateRandomText(10),
 			}
 		} else {
 			evt = &Event1{"val " + strconv.Itoa(i)}

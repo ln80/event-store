@@ -1,4 +1,4 @@
-package test_suite
+package testutil
 
 import (
 	"context"
@@ -6,32 +6,29 @@ import (
 	"testing"
 
 	"github.com/ln80/event-store/event"
-	"github.com/ln80/event-store/testutil"
 )
 
 func TestSerializer(t *testing.T, ctx context.Context, ser event.Serializer) {
 	stmID := event.NewStreamID("tenantID")
 
 	t.Run("marshal_unmarshal single", func(t *testing.T) {
-		evt := event.Wrap(ctx, stmID, testutil.GenEvents(1))[0]
-		b, _, err := ser.MarshalEvent(evt)
+		evt := event.Wrap(ctx, stmID, GenEvents(1))[0]
+		b, _, err := ser.MarshalEvent(ctx, evt)
 		if err != nil {
 			t.Fatalf("expect err be nil, got %v", err)
 		}
-		resEvt, err := ser.UnmarshalEvent(b)
+		resEvt, err := ser.UnmarshalEvent(ctx, b)
 		if err != nil {
 			t.Fatalf("expect err be nil, got %v", err)
 		}
 
 		// some implementation might lazy-unmarshal the original event
-		_ = resEvt.Event()
-
-		if want, got := evt, resEvt; !testutil.CmpEnv(want, got) {
-			t.Fatalf("expect %s, %s  be equals", testutil.FormatEnv(want), testutil.FormatEnv(got))
+		if want, got := evt, resEvt; !CmpEnv(want, got) {
+			t.Fatalf("expect %s, %s  be equals", FormatEnv(want), FormatEnv(got))
 		}
 
 		// make sure we do not lose data even if we marshal x2
-		b2, _, err := ser.MarshalEvent(resEvt)
+		b2, _, err := ser.MarshalEvent(ctx, resEvt)
 		if err != nil {
 			t.Fatalf("expect err be nil, got %v", err)
 		}
@@ -41,12 +38,12 @@ func TestSerializer(t *testing.T, ctx context.Context, ser event.Serializer) {
 	})
 
 	t.Run("marshal_unmarshal batch", func(t *testing.T) {
-		evts := event.Wrap(ctx, stmID, testutil.GenEvents(20))
-		b, _, err := ser.MarshalEventBatch(evts)
+		evts := event.Wrap(ctx, stmID, GenEvents(20))
+		b, _, err := ser.MarshalEventBatch(ctx, evts)
 		if err != nil {
 			t.Fatalf("expect err be nil, got %v", err)
 		}
-		rEvts, err := ser.UnmarshalEventBatch(b)
+		rEvts, err := ser.UnmarshalEventBatch(ctx, b)
 		if err != nil {
 			t.Fatalf("expect err be nil, got %v", err)
 		}
@@ -57,13 +54,13 @@ func TestSerializer(t *testing.T, ctx context.Context, ser event.Serializer) {
 
 		for i, rEvt := range rEvts {
 			_ = rEvt.Event()
-			if want, got := evts[i], rEvt; !testutil.CmpEnv(want, got) {
-				t.Fatalf("expect %s, %s be equals", testutil.FormatEnv(want), testutil.FormatEnv(got))
+			if want, got := evts[i], rEvt; !CmpEnv(want, got) {
+				t.Fatalf("expect %s, %s be equals", FormatEnv(want), FormatEnv(got))
 			}
 		}
 
 		// make sure we do not lose data even if we marshal x2
-		b2, _, err := ser.MarshalEventBatch(rEvts)
+		b2, _, err := ser.MarshalEventBatch(ctx, rEvts)
 		if err != nil {
 			t.Fatalf("expect err be nil, got %v", err)
 		}

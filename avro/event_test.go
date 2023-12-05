@@ -22,18 +22,14 @@ func TestEvent(t *testing.T) {
 	t.Run("convert", func(t *testing.T) {
 		evt := event.Wrap(ctx, stmID, testutil.GenEvents(1), event.WithNameSpace("service1"))[0]
 
-		avroEvt, err := convertEvent[Container](evt)
+		avroEvt, err := convertEvent(evt)
 		if err != nil {
 			t.Fatalf("expect err be nil, got %v", err)
 		}
 
-		if _, ok := any(avroEvt).(*avroEvent[Container]); !ok {
+		if _, ok := any(avroEvt).(*avroEvent); !ok {
 			t.Fatalf("expect event type be *avroEvent, got %T", avroEvt)
 		}
-
-		// TODO get rid of this...
-		avroEvt.namespace = ""
-
 		_ = avroEvt.Event()
 
 		if want, got := evt, avroEvt; !testutil.CmpEnv(want, got) {
@@ -44,13 +40,10 @@ func TestEvent(t *testing.T) {
 	t.Run("original", func(t *testing.T) {
 		evts := testutil.GenEvents(1)
 
-		avroEvt, err := convertEvent[Container](event.Wrap(ctx, stmID, evts, event.WithNameSpace("service1"))[0])
+		avroEvt, err := convertEvent(event.Wrap(ctx, stmID, evts, event.WithNameSpace("service1"))[0])
 		if err != nil {
 			t.Fatalf("expect err be nil, got %v", err)
 		}
-
-		// TODO get rid of this...
-		avroEvt.namespace = "service1"
 
 		if want, got := reflect.TypeOf(evts[0]).Name(), reflect.TypeOf(avroEvt.Event()).Name(); want != got {
 			t.Fatalf("expect %s, %s  be equals", want, got)

@@ -1,6 +1,7 @@
 package json
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -23,7 +24,7 @@ func NewEventSerializer(namespace string) event.Serializer {
 
 var _ event.Serializer = &eventSerializer{}
 
-func (s *eventSerializer) MarshalEvent(evt event.Envelope) (b []byte, n int, err error) {
+func (s *eventSerializer) MarshalEvent(ctx context.Context, evt event.Envelope) (b []byte, n int, err error) {
 	if evt == nil {
 		err = event.ErrMarshalEmptyEvent
 		return
@@ -52,7 +53,7 @@ func (s *eventSerializer) MarshalEvent(evt event.Envelope) (b []byte, n int, err
 	return
 }
 
-func (s *eventSerializer) MarshalEventBatch(events []event.Envelope) (b []byte, n []int, err error) {
+func (s *eventSerializer) MarshalEventBatch(ctx context.Context, events []event.Envelope) (b []byte, n []int, err error) {
 	l := len(events)
 
 	if l == 0 {
@@ -89,7 +90,7 @@ func (s *eventSerializer) MarshalEventBatch(events []event.Envelope) (b []byte, 
 	return
 }
 
-func (s *eventSerializer) UnmarshalEvent(b []byte) (event.Envelope, error) {
+func (s *eventSerializer) UnmarshalEvent(ctx context.Context, b []byte) (event.Envelope, error) {
 	jsonEvt := jsonEvent{
 		reg: s.eventRegistry,
 	}
@@ -99,7 +100,7 @@ func (s *eventSerializer) UnmarshalEvent(b []byte) (event.Envelope, error) {
 	return &jsonEvt, nil
 }
 
-func (s *eventSerializer) UnmarshalEventBatch(b []byte) ([]event.Envelope, error) {
+func (s *eventSerializer) UnmarshalEventBatch(ctx context.Context, b []byte) ([]event.Envelope, error) {
 	jsonEvents := []jsonEvent{}
 	if err := json.Unmarshal(b, &jsonEvents); err != nil {
 		return nil, err

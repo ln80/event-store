@@ -1,4 +1,4 @@
-package test_suite
+package testutil
 
 import (
 	"context"
@@ -7,14 +7,13 @@ import (
 	"time"
 
 	"github.com/ln80/event-store/event"
-	"github.com/ln80/event-store/testutil"
 )
 
-func EventStoreTest(t *testing.T, ctx context.Context, store event.Store) {
+func TestEventLoggingStore(t *testing.T, ctx context.Context, store event.Store) {
 	t.Run("event logging basic operations", func(t *testing.T) {
 		streamID := event.NewStreamID(event.UID().String())
 		// test append events to stream
-		envs := event.Wrap(ctx, streamID, testutil.GenEvents(10))
+		envs := event.Wrap(ctx, streamID, GenEvents(10))
 		if err := event.Stream(envs).Validate(func(v *event.Validation) {
 			v.SkipVersion = true
 		}); err != nil {
@@ -41,8 +40,8 @@ func EventStoreTest(t *testing.T, ctx context.Context, store event.Store) {
 
 		// assert data integrity
 		for i, env := range envs {
-			if !testutil.CmpEnv(env, renvs[i]) {
-				t.Fatalf("event %d data altered %v %v", i, testutil.FormatEnv(env), testutil.FormatEnv(renvs[i]))
+			if !CmpEnv(env, renvs[i]) {
+				t.Fatalf("event %d data altered %v %v", i, FormatEnv(env), FormatEnv(renvs[i]))
 			}
 		}
 
@@ -57,8 +56,8 @@ func EventStoreTest(t *testing.T, ctx context.Context, store event.Store) {
 
 		// assert data integrity
 		for i, env := range renvs {
-			if !testutil.CmpEnv(env, envs[i]) {
-				t.Fatalf("event %d data altered %v %v", i, testutil.FormatEnv(env), testutil.FormatEnv(envs[i]))
+			if !CmpEnv(env, envs[i]) {
+				t.Fatalf("event %d data altered %v %v", i, FormatEnv(env), FormatEnv(envs[i]))
 			}
 		}
 	})
@@ -67,7 +66,7 @@ func EventStoreTest(t *testing.T, ctx context.Context, store event.Store) {
 		streamID := event.NewStreamID(event.UID().String())
 
 		// test append events to stream
-		envs := event.Wrap(ctx, streamID, testutil.GenEvents(10), func(env event.RWEnvelope) {
+		envs := event.Wrap(ctx, streamID, GenEvents(10), func(env event.RWEnvelope) {
 			env.SetTTL(5 * time.Microsecond)
 		})
 		if err := event.Stream(envs).Validate(func(v *event.Validation) {

@@ -1,4 +1,4 @@
-package test_suite
+package testutil
 
 import (
 	"context"
@@ -6,19 +6,18 @@ import (
 	"testing"
 
 	"github.com/ln80/event-store/event"
-	"github.com/ln80/event-store/testutil"
 )
 
-type EventStreamerSuiteOptions struct {
+type TestEventStreamerOptions struct {
 	PostAppend       func(id event.StreamID)
 	SupportOrderDESC bool
 }
 
-func EventStreamerSuite(t *testing.T, ctx context.Context, store interface {
+func TestEventStreamer(t *testing.T, ctx context.Context, store interface {
 	event.Streamer
 	event.Store
-}, opts ...func(*EventStreamerSuiteOptions)) {
-	opt := &EventStreamerSuiteOptions{
+}, opts ...func(*TestEventStreamerOptions)) {
+	opt := &TestEventStreamerOptions{
 		PostAppend: func(id event.StreamID) {
 		},
 		SupportOrderDESC: false,
@@ -47,12 +46,12 @@ func EventStreamerSuite(t *testing.T, ctx context.Context, store interface {
 	streamID2 := event.NewStreamID(globalID, "service2")
 
 	// append events to sub-streams
-	if err := store.Append(ctx, streamID1, event.Wrap(ctx, streamID1, testutil.GenEvents(10))); err != nil {
+	if err := store.Append(ctx, streamID1, event.Wrap(ctx, streamID1, GenEvents(10))); err != nil {
 		t.Fatalf("expect to append events, got err: %v", err)
 	}
 	opt.PostAppend(streamID1)
 
-	if err := store.Append(ctx, streamID2, event.Wrap(ctx, streamID2, testutil.GenEvents(15))); err != nil {
+	if err := store.Append(ctx, streamID2, event.Wrap(ctx, streamID2, GenEvents(15))); err != nil {
 		t.Fatalf("expect to append events, got err: %v", err)
 	}
 	opt.PostAppend(streamID2)
@@ -107,8 +106,8 @@ func EventStreamerSuite(t *testing.T, ctx context.Context, store interface {
 			})
 
 			for i := 0; i < len(events); i++ {
-				if want, got := events[i], descEvents[i]; !testutil.CmpEnv(want, got) {
-					t.Fatalf("expect %v, %v be equals", testutil.FormatEnv(want), testutil.FormatEnv(got))
+				if want, got := events[i], descEvents[i]; !CmpEnv(want, got) {
+					t.Fatalf("expect %v, %v be equals", FormatEnv(want), FormatEnv(got))
 				}
 			}
 		}

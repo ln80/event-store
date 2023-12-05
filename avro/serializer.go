@@ -1,41 +1,37 @@
 package avro
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"log"
 
-	"github.com/hamba/avro/v2"
 	"github.com/ln80/event-store/event"
 )
 
-type EventSerializer[T any] struct {
-	namespace string
-
-	schema      avro.Schema
-	batchSchema avro.Schema
+type EventSerializer struct {
+	registry Registry
 }
 
-// NewEventSerializer returns a json event serializer
-func NewEventSerializer[T any](namespace string) *EventSerializer[T] {
-	sch, err := eventSchema[T]()
+func NewEventSerializer(ctx context.Context, namespace string, registry Registry) *EventSerializer {
+	sch, err := eventSchema(registry.Client(), namespace)
 	if err != nil {
 		panic(err)
 	}
-	batchSch, err := eventBatchSchema[T]()
-	if err != nil {
+
+	if err := registry.Setup(ctx, sch); err != nil {
 		panic(err)
 	}
-	return &EventSerializer[T]{
-		namespace:   namespace,
-		schema:      sch,
-		batchSchema: batchSch,
+
+	return &EventSerializer{
+		registry: registry,
 	}
 }
 
-var _ event.Serializer = &EventSerializer[any]{}
+var _ event.Serializer = &EventSerializer{}
 
 // MarshalEvent implements event.Serializer.
-func (s *EventSerializer[T]) MarshalEvent(evt event.Envelope) (b []byte, n int, err error) {
+func (s *EventSerializer) MarshalEvent(ctx context.Context, evt event.Envelope) (b []byte, n int, err error) {
 	if evt == nil {
 		err = event.ErrMarshalEmptyEvent
 		return
@@ -48,10 +44,10 @@ func (s *EventSerializer[T]) MarshalEvent(evt event.Envelope) (b []byte, n int, 
 	}()
 
 	var (
-		avroEvt *avroEvent[T]
+		avroEvt *avroEvent
 	)
 
-	avroEvt, err = convertEvent[T](evt)
+	avroEvt, err = convertEvent(evt)
 	if err != nil {
 		return
 	}
@@ -61,7 +57,11 @@ func (s *EventSerializer[T]) MarshalEvent(evt event.Envelope) (b []byte, n int, 
 		return
 	}
 
-	b, err = avro.Marshal(s.schema, *avroEvt)
+	b, err = s.registry.Marshal(ctx, avroEvt)
+	if err != nil {
+		log.Println("fail to marshal using avro registry ", err)
+		return
+	}
 
 	n = len(b)
 
@@ -70,7 +70,7 @@ func (s *EventSerializer[T]) MarshalEvent(evt event.Envelope) (b []byte, n int, 
 
 // MarshalEventBatch implements event.Serializer.
 // Note event size per item n []int is not supported at the moment
-func (s *EventSerializer[T]) MarshalEventBatch(events []event.Envelope) (b []byte, n []int, err error) {
+func (s *EventSerializer) MarshalEventBatch(ctx context.Context, events []event.Envelope) (b []byte, n []int, err error) {
 	l := len(events)
 
 	if l == 0 {
@@ -88,14 +88,14 @@ func (s *EventSerializer[T]) MarshalEventBatch(events []event.Envelope) (b []byt
 		}
 	}()
 
-	avroEvents := make([]avroEvent[T], l)
+	avroEvents := make([]avroEvent, l)
 	for i, evt := range events {
 		var (
-			avroEvt *avroEvent[T]
+			avroEvt *avroEvent
 			ok      bool
 		)
-		if avroEvt, ok = evt.(*avroEvent[T]); !ok {
-			avroEvt, err = convertEvent[T](evt)
+		if avroEvt, ok = evt.(*avroEvent); !ok {
+			avroEvt, err = convertEvent(evt)
 			if err != nil {
 				return
 			}
@@ -103,35 +103,35 @@ func (s *EventSerializer[T]) MarshalEventBatch(events []event.Envelope) (b []byt
 		avroEvents[i] = *avroEvt
 	}
 
-	b, err = avro.Marshal(s.batchSchema, avroEvents)
-
+	b, err = s.registry.MarshalBatch(ctx, avroEvents)
+	if err != nil {
+		return
+	}
 	return
 }
 
 // UnmarshalEvent implements event.Serializer.
-func (s *EventSerializer[T]) UnmarshalEvent(b []byte) (event.Envelope, error) {
-	avroEvt := avroEvent[T]{
-		namespace: s.namespace,
-	}
+func (s *EventSerializer) UnmarshalEvent(ctx context.Context, b []byte) (event.Envelope, error) {
+	avroEvt := avroEvent{}
 
-	if err := avro.Unmarshal(s.schema, b, &avroEvt); err != nil {
+	if err := s.registry.Unmarshal(ctx, b, &avroEvt); err != nil {
 		return nil, err
 	}
+
 	return &avroEvt, nil
 }
 
 // UnmarshalEventBatch implements event.Serializer.
-func (s *EventSerializer[T]) UnmarshalEventBatch(b []byte) ([]event.Envelope, error) {
-	avroEvents := []avroEvent[T]{}
+func (s *EventSerializer) UnmarshalEventBatch(ctx context.Context, b []byte) ([]event.Envelope, error) {
+	avroEvents := []avroEvent{}
 
-	if err := avro.Unmarshal(s.batchSchema, b, &avroEvents); err != nil {
+	if err := s.registry.UnmarshalBatch(ctx, b, &avroEvents); err != nil {
 		return nil, err
 	}
 
 	envs := make([]event.Envelope, len(avroEvents))
 	for i, avroEvt := range avroEvents {
 		avroEvt := avroEvt
-		avroEvt.namespace = s.namespace
 		envs[i] = &avroEvt
 	}
 	return envs, nil
