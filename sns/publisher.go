@@ -84,6 +84,9 @@ func (p *Publisher) publish(ctx context.Context, events []event.Envelope) error 
 			return err
 		}
 
+		// body := base64.StdEncoding.EncodeToString(msg)
+		body := string(msg)
+
 		attributes := map[string]types.MessageAttributeValue{
 			"StmID": {
 				DataType:    aws.String("String"),
@@ -102,7 +105,7 @@ func (p *Publisher) publish(ctx context.Context, events []event.Envelope) error 
 		}
 
 		if _, err = p.svc.Publish(ctx, &sns.PublishInput{
-			Message:                aws.String(string(msg)),
+			Message:                aws.String(body),
 			TopicArn:               aws.String(p.topic),
 			MessageAttributes:      attributes,
 			MessageDeduplicationId: aws.String(evt.GlobalStreamID() + "@" + evt.GlobalVersion().String()),
@@ -121,6 +124,8 @@ func (p *Publisher) publishRecord(ctx context.Context, events []event.Envelope) 
 	if err != nil {
 		return err
 	}
+
+	body := string(record)
 
 	_types := make([]string, 0)
 	for _, evt := range events {
@@ -154,7 +159,7 @@ func (p *Publisher) publishRecord(ctx context.Context, events []event.Envelope) 
 		}
 	}
 	_, err = p.svc.Publish(ctx, &sns.PublishInput{
-		Message:                aws.String(string(record)),
+		Message:                aws.String(body),
 		TopicArn:               aws.String(p.topic),
 		MessageAttributes:      attributes,
 		MessageDeduplicationId: aws.String(events[0].GlobalStreamID() + "@" + events[0].GlobalVersion().String()),

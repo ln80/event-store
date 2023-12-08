@@ -44,7 +44,6 @@ func eventSchema(a avro.API, namespace string) (avro.Schema, error) {
 		}
 		schemas = append(schemas, sch)
 
-		// log.Printf("register %v %T", t, reflect.New(entry.Type()).Interface())
 		a.Register(t, reflect.New(entry.Type()).Interface())
 	}
 
@@ -56,6 +55,10 @@ func eventSchema(a avro.API, namespace string) (avro.Schema, error) {
 	return schemaOf(reflect.TypeOf(avroEvent{}), func(sc *schemaConfig) {
 		sc.inject["union"] = unionSch
 		sc.namespace = namespace
+		if sc.namespace == "" {
+			sc.namespace = "global"
+		}
+		sc.name = "events"
 	})
 }
 

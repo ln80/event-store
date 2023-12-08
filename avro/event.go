@@ -50,6 +50,9 @@ type avroEvent struct {
 	FUser             string        `avro:"User"`
 	FDests            []string      `avro:"Dests"`
 	FTTL              time.Duration `avro:"TTL"`
+
+	// schemaID used by avro registries to allow re-encoding the event using the same schema.
+	schemaID string `avro:"-"`
 }
 
 var _ event.Envelope = &avroEvent{}
@@ -136,4 +139,12 @@ func (e *avroEvent) Transform(fn func(any) any) {
 	if e.Event() != nil {
 		e.fEvent = fn(e.fEvent)
 	}
+}
+
+func (e *avroEvent) SetSchemaID(id string) {
+	e.schemaID = id
+}
+
+func (e *avroEvent) SchemaID() string {
+	return e.schemaID
 }

@@ -1,9 +1,10 @@
-//go:build integ
+// go:build integ
 
 package main
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"os"
 	"testing"
@@ -12,6 +13,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	"github.com/ln80/event-store/avro"
+	"github.com/ln80/event-store/avro/glue"
 	"github.com/ln80/event-store/dynamodb"
 	"github.com/ln80/event-store/event"
 	"github.com/ln80/event-store/stack/elastic/utils"
@@ -34,6 +37,7 @@ func TestIntegration(t *testing.T) {
 	// init aws config
 	cfg, err := config.LoadDefaultConfig(
 		ctx,
+		config.WithRegion("eu-west-1"),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -41,6 +45,7 @@ func TestIntegration(t *testing.T) {
 
 	output, err := cloudformation.NewFromConfig(cfg).DescribeStacks(ctx, &cloudformation.DescribeStacksInput{
 		StackName: &stackName,
+		// StackName: aws.String("elastic-event-store-integ-test-1"),
 	})
 	if err != nil {
 		t.Fatalf("failed to describe stack: %v", err)
@@ -50,7 +55,7 @@ func TestIntegration(t *testing.T) {
 	}
 	stack := output.Stacks[0]
 	var (
-		table, queueUrl string
+		table, queueUrl, registryName string
 	)
 	for _, output := range stack.Outputs {
 		switch *output.OutputKey {
@@ -58,15 +63,31 @@ func TestIntegration(t *testing.T) {
 			table = *output.OutputValue
 		case "ConsumerQueueUrl":
 			queueUrl = *output.OutputValue
+		case "SchemaRegistryName":
+			registryName = *output.OutputValue
 		}
 	}
-	if table == "" || queueUrl == "" {
-		t.Fatal("missed stack params", table, queueUrl)
+	if table == "" || queueUrl == "" || registryName == "" {
+		t.Fatal("missed stack params", table, queueUrl, registryName)
 	}
-	t.Log("stack params", table, queueUrl)
+	t.Log("stack params", table, queueUrl, registryName)
 
 	// init dynamodb event store client
-	store := dynamodb.NewEventStore(utils.InitDynamodbClient(cfg), table)
+
+	serializer := avro.NewEventSerializer(
+		ctx,
+		glue.NewRegistry(
+			registryName,
+			utils.InitGlueClient(cfg),
+		),
+		func(esc *avro.EventSerializerConfig) {
+			esc.Namespace = ""
+		},
+	)
+
+	store := dynamodb.NewEventStore(utils.InitDynamodbClient(cfg), table, func(sc *dynamodb.StoreConfig) {
+		sc.Serializer = serializer
+	})
 
 	// test event-logging use cases
 	testutil.TestEventLoggingStore(t, ctx, store)
@@ -99,6 +120,20 @@ func TestIntegration(t *testing.T) {
 		}
 
 		t.Logf("%d message received", len(output.Messages))
+
+		for _, msg := range output.Messages {
+			b, err := base64.StdEncoding.DecodeString(*msg.Body)
+			if err != nil {
+				return errors.New("decode bas64 failed")
+			}
+
+			evt, err := serializer.UnmarshalEvent(ctx, b)
+			if err != nil {
+				return errors.New("unmarshal received event failed")
+			}
+
+			t.Logf("received evt %+v", testutil.FormatEnv(evt))
+		}
 
 		return nil
 	}); err != nil {

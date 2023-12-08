@@ -65,6 +65,17 @@ Parameters:
     Description: |
       BatchRecordEnabled indicates wether record events have to be published in a single message or not
 
+  EncodingFormat:
+    Type: String
+    Default: "JSON"
+    AllowedValues:
+      - "JSON"
+      - "AVRO"
+
+  GlueSchemaRegistryName:
+    Type: String
+    Default: ""
+  
   RetainResource:
     Type: String
     Default: "false"
@@ -90,6 +101,11 @@ Conditions:
     !Equals
       - !Ref RetainResource
       - "true"
+
+  MustUseAvro:
+    !Equals
+      - !Ref EncodingFormat
+      - "AVRO"
 
 Resources:
   EventTable:
@@ -265,10 +281,35 @@ Resources:
                 Action:
                   - 'sns:Publish'
                 Resource: !Ref PublishSNSTopicArn
+          - !If
+            - MustUseAvro
+            - Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - glue:GetSchemaVersion
+                    - glue:GetSchema
+                    - glue:GetSchemaByDefinition
+                    - glue:CreateSchema
+                    # - glue:UpdateSchema
+                    - glue:RegisterSchemaVersion
+                  Resource:
+                    # seems that glue:GetSchemaVersion action requires wildcard as resource 
+                    - "*"
+                    # - !Sub
+                    #   - "arn:aws:glue:${AWS::Region}:${AWS::AccountId}:registry/${RegistryName}"
+                    #   - { RegistryName: !Ref GlueSchemaRegistryName }
+                    # - !Sub
+                    #   - "arn:aws:glue:${AWS::Region}:${AWS::AccountId}:schema/${RegistryName}/*"
+                    #   - { RegistryName: !Ref GlueSchemaRegistryName }
+                    
+            - !Ref AWS::NoValue
         Environment:
             Variables:
               SNS_TOPIC: !Ref PublishSNSTopicArn
               BATCH_RECORD_ENABLED: !Ref BatchRecordEnabled
+              ENCODING_FORMAT: !Ref EncodingFormat
+              GlUE_SCHEMA_REGISTRY: !Ref GlueSchemaRegistryName
 
   PublisherCloudWatchAlarm:
     Type: 'AWS::CloudWatch::Alarm'

@@ -4,27 +4,59 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 
+	"github.com/hamba/avro/v2"
+	avro_registry "github.com/ln80/event-store/avro/registry"
 	"github.com/ln80/event-store/event"
 )
 
+var (
+	ErrReadOnlyModeEnabled = errors.New("read only mode enabled")
+)
+
 type EventSerializer struct {
-	registry Registry
+	registry avro_registry.Registry
+
+	cfg *EventSerializerConfig
 }
 
-func NewEventSerializer(ctx context.Context, namespace string, registry Registry) *EventSerializer {
-	sch, err := eventSchema(registry.Client(), namespace)
-	if err != nil {
-		panic(err)
+type EventSerializerConfig struct {
+	ReadOnly          bool
+	Namespace         string
+	SkipCurrentSchema bool
+}
+
+func NewEventSerializer(ctx context.Context, registry avro_registry.Registry, opts ...func(*EventSerializerConfig)) *EventSerializer {
+	cfg := &EventSerializerConfig{
+		ReadOnly: false,
+	}
+	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
+		opt(cfg)
 	}
 
-	if err := registry.Setup(ctx, sch); err != nil {
+	var (
+		sch avro.Schema
+		err error
+	)
+	if !cfg.SkipCurrentSchema {
+		sch, err = eventSchema(registry.Client(), cfg.Namespace)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	if err := registry.Setup(ctx, sch, func(rc *avro_registry.RegistryConfig) {
+		rc.ReadOnly = cfg.ReadOnly
+	}); err != nil {
 		panic(err)
 	}
 
 	return &EventSerializer{
 		registry: registry,
+		cfg:      cfg,
 	}
 }
 
@@ -32,6 +64,11 @@ var _ event.Serializer = &EventSerializer{}
 
 // MarshalEvent implements event.Serializer.
 func (s *EventSerializer) MarshalEvent(ctx context.Context, evt event.Envelope) (b []byte, n int, err error) {
+	if s.cfg.ReadOnly {
+		err = ErrReadOnlyModeEnabled
+		return
+	}
+
 	if evt == nil {
 		err = event.ErrMarshalEmptyEvent
 		return
@@ -59,7 +96,6 @@ func (s *EventSerializer) MarshalEvent(ctx context.Context, evt event.Envelope) 
 
 	b, err = s.registry.Marshal(ctx, avroEvt)
 	if err != nil {
-		log.Println("fail to marshal using avro registry ", err)
 		return
 	}
 
@@ -71,14 +107,17 @@ func (s *EventSerializer) MarshalEvent(ctx context.Context, evt event.Envelope) 
 // MarshalEventBatch implements event.Serializer.
 // Note event size per item n []int is not supported at the moment
 func (s *EventSerializer) MarshalEventBatch(ctx context.Context, events []event.Envelope) (b []byte, n []int, err error) {
-	l := len(events)
+	if s.cfg.ReadOnly {
+		err = ErrReadOnlyModeEnabled
+		return
+	}
 
+	l := len(events)
 	if l == 0 {
 		err = event.ErrMarshalEmptyEvent
 		return
 	}
 
-	// init sizes slice
 	n = make([]int, l)
 
 	// normalize failure, and do not propagate infra error

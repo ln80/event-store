@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	avro "github.com/hamba/avro/v2"
+	"github.com/ln80/event-store/avro/registry"
 )
 
 type schemaEntry struct {
@@ -23,6 +24,8 @@ type Registry struct {
 	mu      sync.RWMutex
 }
 
+var _ registry.Registry = &Registry{}
+
 func NewRegistry() *Registry {
 	reg := &Registry{
 		compatibility: avro.NewSchemaCompatibility(),
@@ -34,7 +37,7 @@ func NewRegistry() *Registry {
 }
 
 // Setup implements avro.Registry.
-func (r *Registry) Setup(ctx context.Context, schema avro.Schema) error {
+func (r *Registry) Setup(ctx context.Context, schema avro.Schema, opts ...func(*registry.RegistryConfig)) error {
 	if r.current.schema != nil && r.current.schemaID != "" {
 		return nil
 	}

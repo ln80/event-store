@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"sync"
 	"time"
 
@@ -14,11 +15,7 @@ import (
 	smithywaiter "github.com/aws/smithy-go/waiter"
 	"github.com/google/uuid"
 	"github.com/hamba/avro/v2"
-)
-
-var (
-	ErrInvalidSchemaID       = errors.New("invalid schema ID")
-	ErrInvalidDataWireFormat = errors.New("invalid data wire format")
+	"github.com/ln80/event-store/avro/registry"
 )
 
 type schemaEntry struct {
@@ -29,22 +26,23 @@ type schemaEntry struct {
 
 type Registry struct {
 	registryName string
-	schemaName   string
 	client       *glue.Client
 
 	api           avro.API
 	compatibility *avro.SchemaCompatibility
 
-	current schemaEntry
+	current *schemaEntry
 	cache   map[string]schemaEntry
 
-	mu sync.RWMutex
+	mu  sync.RWMutex
+	cfg *registry.RegistryConfig
 }
 
-func NewRegistry(registryName, schemaName string, client *glue.Client) *Registry {
+var _ registry.Registry = &Registry{}
+
+func NewRegistry(registryName string, client *glue.Client) *Registry {
 	reg := &Registry{
 		registryName:  registryName,
-		schemaName:    schemaName,
 		compatibility: avro.NewSchemaCompatibility(),
 		client:        client,
 		cache:         make(map[string]schemaEntry),
@@ -54,8 +52,35 @@ func NewRegistry(registryName, schemaName string, client *glue.Client) *Registry
 	return reg
 }
 
-func (r *Registry) Setup(ctx context.Context, schema avro.Schema) error {
-	if r.current.schema != nil && r.current.schemaID != "" {
+func (r *Registry) Setup(ctx context.Context, schema avro.Schema, opts ...func(*registry.RegistryConfig)) error {
+	cfg := &registry.RegistryConfig{}
+	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
+		opt(cfg)
+	}
+	r.cfg = cfg
+
+	if schema == nil {
+		return nil
+	}
+
+	if r.current != nil {
+		return nil
+	}
+
+	if r.cfg.LocalOnly {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+
+		fingerprint := schema.Fingerprint()
+		r.current = &schemaEntry{
+			schema:      schema.(*avro.RecordSchema),
+			batchSchema: avro.NewArraySchema(schema),
+			schemaID:    string(fingerprint[:]),
+		}
+
 		return nil
 	}
 
@@ -83,28 +108,58 @@ func (r *Registry) Setup(ctx context.Context, schema avro.Schema) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	r.current.schema = schema.(*avro.RecordSchema)
-	r.current.schemaID = id
-	r.current.batchSchema = avro.NewArraySchema(r.current.schema)
+	r.current = &schemaEntry{
+		schema:      schema.(*avro.RecordSchema),
+		batchSchema: avro.NewArraySchema(schema),
+		schemaID:    id,
+	}
 
 	return nil
 }
 
+func (r *Registry) Validate(ctx context.Context, schema avro.Schema) error {
+	return nil
+}
+
+func (r *Registry) Client() avro.API {
+	return r.api
+}
+
 func (r *Registry) Marshal(ctx context.Context, v any) ([]byte, error) {
-	b, err := r.api.Marshal(r.current.schema, v)
+	if r.cfg.ReadOnly {
+		return nil, fmt.Errorf("%w: read only enabled", registry.ErrMarshalOperationUnsupported)
+	}
+
+	var (
+		schema   avro.Schema
+		schemaID string
+	)
+
+	if r.current != nil {
+		schema = r.current.schema
+		schemaID = r.current.schemaID
+	} else {
+		if vv, ok := v.(interface{ SchemaID() string }); ok {
+			schemaID = vv.SchemaID()
+			r.mu.Lock()
+			defer r.mu.Unlock()
+			entry, ok := r.cache[schemaID]
+			if !ok {
+				return nil, fmt.Errorf("%w: for id : %v", registry.ErrUnableToResolveSchema, schemaID)
+			}
+			schema = entry.schema
+		}
+	}
+	b, err := r.api.Marshal(schema, v)
 	if err != nil {
 		return nil, err
 	}
-	b, err = r.appendSchemaID(b, r.current.schemaID)
+	b, err = r.appendSchemaID(b, schemaID)
 	if err != nil {
 		return nil, err
 	}
 
 	return b, nil
-}
-
-func (r *Registry) Client() avro.API {
-	return r.api
 }
 
 func (r *Registry) Unmarshal(ctx context.Context, b []byte, v any) error {
@@ -122,15 +177,55 @@ func (r *Registry) Unmarshal(ctx context.Context, b []byte, v any) error {
 		return err
 	}
 
+	if vv, ok := v.(interface{ SetSchemaID(id string) }); ok {
+		vv.SetSchemaID(id)
+	}
+
 	return nil
 }
 
 func (r *Registry) MarshalBatch(ctx context.Context, v any) ([]byte, error) {
-	b, err := r.api.Marshal(r.current.batchSchema, v)
+	if r.cfg.ReadOnly {
+		return nil, fmt.Errorf("%w: read only enabled", registry.ErrMarshalOperationUnsupported)
+	}
+
+	var (
+		schema   avro.Schema
+		schemaID string
+	)
+
+	if r.current != nil {
+		schema = r.current.batchSchema
+		schemaID = r.current.schemaID
+	} else {
+		val := reflect.ValueOf(v)
+		if val.Kind() == reflect.Pointer {
+			if val.Elem().Kind() == reflect.Slice {
+				elem := val.Elem().Index(0)
+				if elem.CanAddr() {
+					if vv, ok := elem.Addr().Interface().(interface{ SchemaID() string }); ok {
+						id := vv.SchemaID()
+						r.mu.Lock()
+						defer r.mu.Unlock()
+						entry, ok := r.cache[id]
+						if ok {
+							schema = entry.batchSchema
+							schemaID = id
+						}
+					}
+				}
+			}
+		}
+		if schema == nil {
+			return nil, fmt.Errorf("%w: for id : %v", registry.ErrUnableToResolveSchema, schemaID)
+		}
+	}
+
+	b, err := r.api.Marshal(schema, v)
 	if err != nil {
 		return nil, err
 	}
-	b, err = r.appendSchemaID(b, r.current.schemaID)
+	b, err = r.appendSchemaID(b, schemaID)
 	if err != nil {
 		return nil, err
 	}
@@ -153,6 +248,26 @@ func (r *Registry) UnmarshalBatch(ctx context.Context, b []byte, v any) error {
 		return err
 	}
 
+	// TBD find out a way to get rid of reflection.
+	// This might require changing method signature.
+	val := reflect.ValueOf(v)
+	if val.Kind() != reflect.Pointer {
+		return nil
+	}
+	if val.Elem().Kind() != reflect.Slice {
+		return nil
+	}
+	val = val.Elem()
+	for i := 0; i < val.Len(); i++ {
+		elem := val.Index(i)
+		if elem.CanAddr() {
+			v, ok := elem.Addr().Interface().(interface{ SetSchemaID(string) })
+			if ok {
+				v.SetSchemaID(id)
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -160,7 +275,7 @@ func (r *Registry) createSchema(ctx context.Context, schema avro.Schema) (string
 	def, _ := schema.(*avro.RecordSchema).MarshalJSON()
 	out, err := r.client.CreateSchema(ctx, &glue.CreateSchemaInput{
 		DataFormat: types.DataFormatAvro,
-		SchemaName: aws.String(r.schemaName),
+		SchemaName: aws.String(schema.(*avro.RecordSchema).FullName()),
 
 		Compatibility: types.CompatibilityBackwardAll,
 		// Description:      new(string),
@@ -194,7 +309,7 @@ func (r *Registry) updateSchema(ctx context.Context, schema avro.Schema) (string
 		SchemaDefinition: aws.String(string(def)),
 		SchemaId: &types.SchemaId{
 			RegistryName: aws.String(r.registryName),
-			SchemaName:   aws.String(r.schemaName),
+			SchemaName:   aws.String(schema.(*avro.RecordSchema).FullName()),
 		},
 	})
 	if err != nil {
@@ -272,7 +387,7 @@ func (r *Registry) getSchemaByDefinition(ctx context.Context, schema avro.Schema
 		SchemaDefinition: aws.String(string(def)),
 		SchemaId: &types.SchemaId{
 			RegistryName: aws.String(r.registryName),
-			SchemaName:   aws.String(r.schemaName),
+			SchemaName:   aws.String(schema.(*avro.RecordSchema).FullName()),
 		},
 	})
 	if err != nil {
@@ -280,7 +395,7 @@ func (r *Registry) getSchemaByDefinition(ctx context.Context, schema avro.Schema
 	}
 
 	id := aws.ToString(out.SchemaVersionId)
-	if r.current.schema != nil && r.current.schemaID != id {
+	if r.current != nil && r.current.schemaID != id {
 		schema, err = r.compatibility.Resolve(r.current.schema, schema)
 		if err != nil {
 			return "", nil, err
@@ -299,7 +414,7 @@ func (r *Registry) getSchema(ctx context.Context, id string) (string, *avro.Reco
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if id == r.current.schemaID {
+	if r.current != nil && r.current.schemaID == id {
 		return id, r.current.schema, r.current.batchSchema, nil
 	}
 
@@ -312,10 +427,12 @@ func (r *Registry) getSchema(ctx context.Context, id string) (string, *avro.Reco
 	if err != nil {
 		return "", nil, nil, err
 	}
-
-	schema, err := r.compatibility.Resolve(r.current.schema, avro.MustParse(aws.ToString(out.SchemaDefinition)))
-	if err != nil {
-		return "", nil, nil, err
+	schema := avro.MustParse(aws.ToString(out.SchemaDefinition))
+	if r.current != nil {
+		schema, err = r.compatibility.Resolve(r.current.schema, schema)
+		if err != nil {
+			return "", nil, nil, err
+		}
 	}
 	r.cache[id] = schemaEntry{
 		schema:      schema.(*avro.RecordSchema),
@@ -328,15 +445,15 @@ func (r *Registry) getSchema(ctx context.Context, id string) (string, *avro.Reco
 
 func (r *Registry) extractSchemaID(data []byte) (string, []byte, error) {
 	if len(data) < 18 {
-		return "", nil, fmt.Errorf("%w: data too short", ErrInvalidDataWireFormat)
+		return "", nil, fmt.Errorf("%w: data too short", registry.ErrInvalidDataWireFormat)
 	}
 
 	if data[0] != 3 {
-		return "", nil, fmt.Errorf("%w: invalid first byte", ErrInvalidDataWireFormat)
+		return "", nil, fmt.Errorf("%w: invalid first byte", registry.ErrInvalidDataWireFormat)
 	}
 
 	if data[1] != 0 {
-		return "", nil, fmt.Errorf("%w: invalid second byte", ErrInvalidDataWireFormat)
+		return "", nil, fmt.Errorf("%w: invalid second byte", registry.ErrInvalidDataWireFormat)
 	}
 
 	return uuid.UUID(data[2:18]).String(), data[18:], nil
@@ -345,10 +462,10 @@ func (r *Registry) extractSchemaID(data []byte) (string, []byte, error) {
 func (r *Registry) appendSchemaID(data []byte, id string) ([]byte, error) {
 	bid, err := uuid.Parse(id)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrInvalidSchemaID, err)
+		return nil, fmt.Errorf("%w: %v (%v)", registry.ErrInvalidSchemaID, err, id)
 	}
 	if len(bid) > 16 {
-		return nil, fmt.Errorf("%w: invalid length", ErrInvalidSchemaID)
+		return nil, fmt.Errorf("%w: invalid length", registry.ErrInvalidSchemaID)
 	}
 
 	return append([]byte{3, 0}, append(bid[:], data...)...), nil
