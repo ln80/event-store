@@ -37,22 +37,24 @@ func convertEvent(evt event.Envelope) (to *avroEvent, err error) {
 
 type avroEvent struct {
 	FStreamID         string `avro:"StmID"`
-	fGlobalStreamID   string `avro:"-"`
+	fGlobalStreamID   string
 	FRawGlobalVersion string `avro:"GVer"`
 	fGlobalVersion    event.Version
 	FRawVersion       string `avro:"Ver"`
 	fVersion          event.Version
-	FID               string        `avro:"ID"`
-	FType             string        `avro:"Type"`
-	FRawEvent         any           `avro:"Data" schema:"union"`
-	fEvent            any           `avro:"-"`
+	FID               string `avro:"ID"`
+	FType             string `avro:"Type"`
+	fEvent            any
 	FAt               int64         `avro:"At"`
 	FUser             string        `avro:"User"`
 	FDests            []string      `avro:"Dests"`
 	FTTL              time.Duration `avro:"TTL"`
 
+	// make sure to put data as last field for future partial decoding (using a sub-schema)
+	FRawEvent any `avro:"Data" schema:"union"`
+
 	// schemaID used by avro registries to allow re-encoding the event using the same schema.
-	schemaID string `avro:"-"`
+	_schemaID string
 }
 
 var _ event.Envelope = &avroEvent{}
@@ -63,7 +65,6 @@ func (e *avroEvent) Event() any {
 	}
 
 	e.fEvent = e.FRawEvent
-
 	if e.fEvent == nil {
 		log.Println("[WARNING] Unmarshal event data has failed")
 	}
@@ -142,9 +143,18 @@ func (e *avroEvent) Transform(fn func(any) any) {
 }
 
 func (e *avroEvent) SetSchemaID(id string) {
-	e.schemaID = id
+	e._schemaID = id
 }
 
 func (e *avroEvent) SchemaID() string {
-	return e.schemaID
+	return e._schemaID
+}
+
+func (e *avroEvent) checkType(namespace string) {
+	if data := e.Event(); data != nil {
+		t := event.TypeOfWithNamespace(namespace, e.Event())
+		if t != e.FType {
+			e.FType = t
+		}
+	}
 }

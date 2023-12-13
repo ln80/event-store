@@ -34,7 +34,8 @@ type Registry struct {
 	current *schemaEntry
 	cache   map[string]schemaEntry
 
-	mu  sync.RWMutex
+	mu sync.RWMutex
+
 	cfg *registry.RegistryConfig
 }
 
@@ -53,14 +54,13 @@ func NewRegistry(registryName string, client *glue.Client) *Registry {
 }
 
 func (r *Registry) Setup(ctx context.Context, schema avro.Schema, opts ...func(*registry.RegistryConfig)) error {
-	cfg := &registry.RegistryConfig{}
+	r.cfg = &registry.RegistryConfig{}
 	for _, opt := range opts {
 		if opt == nil {
 			continue
 		}
-		opt(cfg)
+		opt(r.cfg)
 	}
-	r.cfg = cfg
 
 	if schema == nil {
 		return nil
@@ -70,35 +70,13 @@ func (r *Registry) Setup(ctx context.Context, schema avro.Schema, opts ...func(*
 		return nil
 	}
 
-	if r.cfg.LocalOnly {
-		r.mu.Lock()
-		defer r.mu.Unlock()
-
-		fingerprint := schema.Fingerprint()
-		r.current = &schemaEntry{
-			schema:      schema.(*avro.RecordSchema),
-			batchSchema: avro.NewArraySchema(schema),
-			schemaID:    string(fingerprint[:]),
-		}
-
-		return nil
-	}
-
 	id, _, err := r.getSchemaByDefinition(ctx, schema)
 	if err != nil {
 		var tce *types.EntityNotFoundException
 		if errors.As(err, &tce) {
-			id, err = r.updateSchema(ctx, schema)
+			id, err = r.upsertSchema(ctx, schema)
 			if err != nil {
-				var tce *types.EntityNotFoundException
-				if errors.As(err, &tce) {
-					id, err = r.createSchema(ctx, schema)
-					if err != nil {
-						return err
-					}
-				} else {
-					return err
-				}
+				return err
 			}
 		} else {
 			return err
@@ -107,17 +85,12 @@ func (r *Registry) Setup(ctx context.Context, schema avro.Schema, opts ...func(*
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
-
 	r.current = &schemaEntry{
 		schema:      schema.(*avro.RecordSchema),
 		batchSchema: avro.NewArraySchema(schema),
 		schemaID:    id,
 	}
 
-	return nil
-}
-
-func (r *Registry) Validate(ctx context.Context, schema avro.Schema) error {
 	return nil
 }
 
@@ -248,8 +221,6 @@ func (r *Registry) UnmarshalBatch(ctx context.Context, b []byte, v any) error {
 		return err
 	}
 
-	// TBD find out a way to get rid of reflection.
-	// This might require changing method signature.
 	val := reflect.ValueOf(v)
 	if val.Kind() != reflect.Pointer {
 		return nil
@@ -269,6 +240,23 @@ func (r *Registry) UnmarshalBatch(ctx context.Context, b []byte, v any) error {
 	}
 
 	return nil
+}
+
+func (r *Registry) upsertSchema(ctx context.Context, schema avro.Schema) (string, error) {
+	id, err := r.updateSchema(ctx, schema)
+	if err != nil {
+		var tce *types.EntityNotFoundException
+		if errors.As(err, &tce) {
+			id, err = r.createSchema(ctx, schema)
+			if err != nil {
+				return "", err
+			}
+		} else {
+			return "", err
+		}
+	}
+
+	return id, err
 }
 
 func (r *Registry) createSchema(ctx context.Context, schema avro.Schema) (string, error) {

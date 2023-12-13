@@ -21,8 +21,11 @@ type EventSerializer struct {
 }
 
 type EventSerializerConfig struct {
-	ReadOnly          bool
-	Namespace         string
+	ReadOnly  bool
+	Namespace string
+	// SkipCurrentSchema disables the generation of the current schema from registered event.
+	// In this case, marshaling & unmarshaling functions will attempt to resolve schema ID from event envelope,
+	// otherwise it fails.
 	SkipCurrentSchema bool
 }
 
@@ -156,6 +159,7 @@ func (s *EventSerializer) UnmarshalEvent(ctx context.Context, b []byte) (event.E
 	if err := s.registry.Unmarshal(ctx, b, &avroEvt); err != nil {
 		return nil, err
 	}
+	avroEvt.checkType(s.cfg.Namespace)
 
 	return &avroEvt, nil
 }
@@ -170,7 +174,7 @@ func (s *EventSerializer) UnmarshalEventBatch(ctx context.Context, b []byte) ([]
 
 	envs := make([]event.Envelope, len(avroEvents))
 	for i, avroEvt := range avroEvents {
-		avroEvt := avroEvt
+		avroEvt.checkType(s.cfg.Namespace)
 		envs[i] = &avroEvt
 	}
 	return envs, nil

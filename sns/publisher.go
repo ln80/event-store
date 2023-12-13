@@ -83,7 +83,6 @@ func (p *Publisher) publish(ctx context.Context, events []event.Envelope) error 
 		if err != nil {
 			return err
 		}
-
 		// body := base64.StdEncoding.EncodeToString(msg)
 		body := string(msg)
 
@@ -124,7 +123,7 @@ func (p *Publisher) publishRecord(ctx context.Context, events []event.Envelope) 
 	if err != nil {
 		return err
 	}
-
+	// body := base64.StdEncoding.EncodeToString(record)
 	body := string(record)
 
 	_types := make([]string, 0)
@@ -135,7 +134,6 @@ func (p *Publisher) publishRecord(ctx context.Context, events []event.Envelope) 
 	_types = slices.Compact(_types)
 
 	dests := make([]string, 0)
-	dests = append(dests)
 	for _, evt := range events {
 		dests = append(dests, evt.Dests()...)
 	}

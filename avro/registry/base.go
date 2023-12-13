@@ -15,8 +15,7 @@ var (
 )
 
 type RegistryConfig struct {
-	LocalOnly bool
-	ReadOnly  bool
+	ReadOnly bool
 }
 
 // Registry presents Avro schema registry used by event serializer to handle schema resolution.

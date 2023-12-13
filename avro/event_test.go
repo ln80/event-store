@@ -10,11 +10,6 @@ import (
 )
 
 func TestEvent(t *testing.T) {
-	type Container struct {
-		E1 *testutil.Event1
-		E2 *testutil.Event2
-	}
-
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, event.ContextNamespaceKey, "")
 	stmID := event.NewStreamID("tenantID")

@@ -291,16 +291,15 @@ Resources:
                     - glue:GetSchema
                     - glue:GetSchemaByDefinition
                     - glue:CreateSchema
-                    # - glue:UpdateSchema
                     - glue:RegisterSchemaVersion
                   Resource:
-                    # seems that glue:GetSchemaVersion action requires wildcard as resource 
+                    # seems that glue:GetSchemaVersion action requires wildcard as resource :(
                     - "*"
                     # - !Sub
-                    #   - "arn:aws:glue:${AWS::Region}:${AWS::AccountId}:registry/${RegistryName}"
+                    #   - "arn:aws:glue:${AWS::Region}:${AWS::AccountId}:schema/${RegistryName}/*"
                     #   - { RegistryName: !Ref GlueSchemaRegistryName }
                     # - !Sub
-                    #   - "arn:aws:glue:${AWS::Region}:${AWS::AccountId}:schema/${RegistryName}/*"
+                    #   - "arn:aws:glue:${AWS::Region}:${AWS::AccountId}:registry/${RegistryName}"
                     #   - { RegistryName: !Ref GlueSchemaRegistryName }
                     
             - !Ref AWS::NoValue

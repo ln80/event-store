@@ -11,9 +11,11 @@ import (
 
 type registryEntryProps map[string]any
 
-func WithEventAliases(aliases ...string) func(registryEntryProps) {
+func WithAliases(aliases ...string) func(registryEntryProps) {
 	return func(rep registryEntryProps) {
-		rep["aliases"] = aliases
+		if len(aliases) > 0 {
+			rep["aliases"] = aliases
+		}
 	}
 }
 
@@ -73,8 +75,8 @@ type Register interface {
 	Convert(evt any) (any, error)
 
 	All() map[string]registryEntry
-	// clear all namespace registries. Its mainly used in internal tests
-	clear()
+	// Clear all namespace registries. Its mainly used in internal tests
+	Clear()
 }
 
 // register implement the Register interface
@@ -190,7 +192,7 @@ func (r *register) Convert(evt any) (convevt any, err error) {
 }
 
 // clear implements clear method of the Register interface
-func (r *register) clear() {
+func (r *register) Clear() {
 	regMu.Lock()
 	defer regMu.Unlock()
 

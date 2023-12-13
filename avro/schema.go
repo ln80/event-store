@@ -1,31 +1,49 @@
 package avro
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/hamba/avro/v2"
 	"github.com/ln80/event-store/event"
-	"github.com/mitchellh/mapstructure"
 )
+
+var typeOfBytes = reflect.TypeOf([]byte(nil))
 
 // eventSchema returns the avro schema of the event defined in the avro package.
 func eventSchema(a avro.API, namespace string) (avro.Schema, error) {
-	schemas := []avro.Schema{avro.NewPrimitiveSchema(avro.Null, nil)}
+	schemas := make([]avro.Schema, 0)
 	for t, entry := range event.NewRegister(namespace).All() {
 		def := entry.Default()
 		mapDef := map[string]any{}
-		if !reflect.ValueOf(def).IsZero() {
-			decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
-				TagName: "avro",
-				Result:  &mapDef,
-			})
+		defVal := reflect.ValueOf(def)
+		if defVal.CanAddr() {
+			defVal = defVal.Elem()
+		}
+		if !defVal.IsZero() {
+			// decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+			// 	TagName: "avro",
+			// 	Result:  &mapDef,
+			// 	// DecodeHook: ,
+			// })
+			// if err != nil {
+			// 	return nil, err
+			// }
+			// err = decoder.Decode(def)
+			// if err != nil {
+			// 	return nil, err
+			// }
+
+			// json-based struct-to-map result is much more compatible with avro lib's parsed default values
+			b, err := json.Marshal(def)
 			if err != nil {
 				return nil, err
 			}
-			err = decoder.Decode(def)
+			err = json.Unmarshal(b, &mapDef)
 			if err != nil {
 				return nil, err
 			}
@@ -44,9 +62,13 @@ func eventSchema(a avro.API, namespace string) (avro.Schema, error) {
 		}
 		schemas = append(schemas, sch)
 
-		a.Register(t, reflect.New(entry.Type()).Interface())
+		a.Register(t, def)
 	}
-
+	// make sure to preserve a deterministic order to avoid creating accidental new schema versions.
+	sort.Slice(schemas, func(i, j int) bool {
+		return schemas[i].(avro.NamedSchema).FullName() <= schemas[j].(avro.NamedSchema).FullName()
+	})
+	schemas = append([]avro.Schema{avro.NewPrimitiveSchema(avro.Null, nil)}, schemas...)
 	unionSch, err := avro.NewUnionSchema(schemas)
 	if err != nil {
 		return nil, err
@@ -94,6 +116,10 @@ func schemaOf(t reflect.Type, opts ...func(*schemaConfig)) (avro.Schema, error) 
 	avroOpts := make([]avro.SchemaOption, 0)
 	if len(cfg.aliases) > 0 {
 		avroOpts = append(avroOpts, avro.WithAliases(cfg.aliases))
+	}
+
+	if t == typeOfBytes {
+		return avro.NewPrimitiveSchema(avro.Bytes, nil, avroOpts...), nil
 	}
 
 	switch t.Kind() {
@@ -160,8 +186,16 @@ func schemaOf(t reflect.Type, opts ...func(*schemaConfig)) (avro.Schema, error) 
 				}
 			}
 			if fs == nil {
+				var aliases []string
+				if tag, ok := f.Tag.Lookup("recordAliases"); ok {
+					aliases = strings.Split(tag, " ")
+				}
 				var err error
-				fs, err = schemaOf(f.Type, childOpt)
+				fs, err = schemaOf(f.Type, childOpt, func(sc *schemaConfig) {
+					if len(aliases) > 0 {
+						sc.aliases = aliases
+					}
+				})
 				if err != nil {
 					return nil, err
 				}
@@ -174,12 +208,19 @@ func schemaOf(t reflect.Type, opts ...func(*schemaConfig)) (avro.Schema, error) 
 			}
 			var fDef any
 			if def, ok := cfg.def.(map[string]any); ok {
-				if d, ok := def[fName]; ok && !reflect.ValueOf(d).IsZero() {
+				d, ok := def[fName]
+				dv := reflect.ValueOf(d)
+				if dv.CanAddr() {
+					dv = dv.Elem()
+				}
+				if ok && d != nil && !dv.IsZero() {
 					fDef = d
 				}
 			}
 			avroFieldOpts := make([]avro.SchemaOption, 0)
-
+			if fDef != nil {
+				avroFieldOpts = append(avroFieldOpts, avro.WithDefault(fDef))
+			}
 			var aliases []string
 			if tag, ok := f.Tag.Lookup("aliases"); ok {
 				aliases = strings.Split(tag, " ")
@@ -187,11 +228,6 @@ func schemaOf(t reflect.Type, opts ...func(*schemaConfig)) (avro.Schema, error) 
 					avroFieldOpts = append(avroFieldOpts, avro.WithAliases(aliases))
 				}
 			}
-
-			if fDef != nil {
-				avroFieldOpts = append(avroFieldOpts, avro.WithDefault(fDef))
-			}
-
 			ff, err := avro.NewField(fName, fs, avroFieldOpts...)
 			if err != nil {
 				return nil, err

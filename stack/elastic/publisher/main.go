@@ -47,8 +47,6 @@ func init() {
 			utils.InitGlueClient(cfg),
 		)
 		serializer = avro.NewEventSerializer(context.Background(), registry, func(esc *avro.EventSerializerConfig) {
-			// do not lookup for current schema from code;
-			// event registry at publisher-level is not aware of the domain events
 			esc.SkipCurrentSchema = true
 		})
 	default:

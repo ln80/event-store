@@ -13,8 +13,8 @@ func TestRegister(t *testing.T) {
 	ctx := context.WithValue(context.Background(), ContextNamespaceKey, namespace)
 
 	reg := NewRegister(namespace)
-	defer reg.clear()
-	// both events are registred whithin the given namespace
+	defer reg.Clear()
+	// both events are registered in the given namespace
 	reg.
 		Set(&testutil.Event{}).
 		Set(&testutil.Event2{})
@@ -24,7 +24,7 @@ func TestRegister(t *testing.T) {
 		t.Fatalf("expect err be %v, got %v", ErrNotFoundInRegistry, err)
 	}
 
-	// succesfully find Event in reg
+	// successfully find Event in reg
 	e, err := reg.Get(TypeOf(&testutil.Event{}))
 	if err != nil {
 		t.Fatal("expected err to be nil, got", err)
@@ -63,8 +63,8 @@ func TestRegister_Convert(t *testing.T) {
 	namespace := "testutil"
 
 	// clear event registry before and after test
-	NewRegister("").clear()
-	defer NewRegister("").clear()
+	NewRegister("").Clear()
+	defer NewRegister("").Clear()
 
 	// testutil.Event is the equivalent of Event.
 	// Event2 does not have an equivalent in the global registry

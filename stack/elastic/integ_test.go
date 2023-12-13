@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -45,7 +46,6 @@ func TestIntegration(t *testing.T) {
 
 	output, err := cloudformation.NewFromConfig(cfg).DescribeStacks(ctx, &cloudformation.DescribeStacksInput{
 		StackName: &stackName,
-		// StackName: aws.String("elastic-event-store-integ-test-1"),
 	})
 	if err != nil {
 		t.Fatalf("failed to describe stack: %v", err)
@@ -72,8 +72,6 @@ func TestIntegration(t *testing.T) {
 	}
 	t.Log("stack params", table, queueUrl, registryName)
 
-	// init dynamodb event store client
-
 	serializer := avro.NewEventSerializer(
 		ctx,
 		glue.NewRegistry(
@@ -89,13 +87,10 @@ func TestIntegration(t *testing.T) {
 		sc.Serializer = serializer
 	})
 
-	// test event-logging use cases
 	testutil.TestEventLoggingStore(t, ctx, store)
 
-	// test event-sourcing use cases
 	testutil.TestEventSourcingStore(t, ctx, store)
 
-	// test replay the global stream use cases
 	testutil.TestEventStreamer(t, ctx, store, func(opt *testutil.TestEventStreamerOptions) {
 		// wait for global stream indexing (asynchronous)
 		opt.PostAppend = func(id event.StreamID) {
@@ -103,9 +98,7 @@ func TestIntegration(t *testing.T) {
 		}
 	})
 
-	// previous tests, for sure, added events to different streams
-	// the following test must receive messages from the integration test's SQS queue
-	// retry logic allows to deal with the asynchronous nature of the publishing process
+	// assert that a sample of events were forwarded to consumer queue
 	if err := retry(2, time.Second, func() error {
 		output, err := sqs.NewFromConfig(cfg).ReceiveMessage(ctx, &sqs.ReceiveMessageInput{
 			QueueUrl:            &queueUrl,
@@ -114,7 +107,6 @@ func TestIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to receive messages: %v", err)
 		}
-
 		if len(output.Messages) == 0 {
 			return errors.New("empty messages result")
 		}
@@ -124,14 +116,12 @@ func TestIntegration(t *testing.T) {
 		for _, msg := range output.Messages {
 			b, err := base64.StdEncoding.DecodeString(*msg.Body)
 			if err != nil {
-				return errors.New("decode bas64 failed")
+				return fmt.Errorf("decode bas64 failed: %v", err)
 			}
-
 			evt, err := serializer.UnmarshalEvent(ctx, b)
 			if err != nil {
-				return errors.New("unmarshal received event failed")
+				return fmt.Errorf("unmarshal received event failed: %v", err)
 			}
-
 			t.Logf("received evt %+v", testutil.FormatEnv(evt))
 		}
 
