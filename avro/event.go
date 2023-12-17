@@ -2,6 +2,7 @@ package avro
 
 import (
 	"log"
+	"reflect"
 	"time"
 
 	"github.com/ln80/event-store/event"
@@ -150,11 +151,32 @@ func (e *avroEvent) SchemaID() string {
 	return e._schemaID
 }
 
+// checkType does change event type in the envelope based
+// on the current event data struct type.
 func (e *avroEvent) checkType(namespace string) {
-	if data := e.Event(); data != nil {
-		t := event.TypeOfWithNamespace(namespace, e.Event())
-		if t != e.FType {
-			e.FType = t
-		}
+	// checking global event registry might be error prone;
+	// make sure to require namespace; this logic might change.
+	if namespace == "" {
+		return
+	}
+
+	// event data might be empty in the case of a removed event type
+	// that is not indicated as alias for another. In a such case just do skip.
+	data := e.Event()
+	if data == nil {
+		return
+	}
+
+	typ := reflect.TypeOf(data)
+	if typ.Kind() == reflect.Pointer {
+		typ = typ.Elem()
+	}
+	if typ.Kind() != reflect.Struct {
+		return
+	}
+
+	t := event.TypeOfWithNamespace(namespace, data)
+	if t != e.FType {
+		e.FType = t
 	}
 }
