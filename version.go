@@ -7,7 +7,7 @@ import (
 type Version string
 
 // VERSION is the current version of the Go Module.
-const VERSION Version = "v0.1.0"
+const ES_VERSION Version = "v0.0.1"
 
 // Semver parses and returns semver struct.
 func (v Version) Semver() *semver.Version {
