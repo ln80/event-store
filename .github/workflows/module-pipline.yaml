@@ -26,12 +26,12 @@ jobs:
       #     --health-cmd "curl http://localhost:9000/minio/health/live"
       
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
           fetch-depth: "0"
 
       - name: Setup Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v4
         with:
           go-version: 1.20
 
@@ -47,7 +47,7 @@ jobs:
         id: version-changed
         with:
           files: |
-             version.go
+              version.go
 
       - name: Read Current Version
         if: ${{ (steps.version-changed.outputs.any_changed == 'true') && (github.event_name == 'push') }}
