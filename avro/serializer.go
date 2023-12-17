@@ -174,6 +174,7 @@ func (s *EventSerializer) UnmarshalEventBatch(ctx context.Context, b []byte) ([]
 
 	envs := make([]event.Envelope, len(avroEvents))
 	for i, avroEvt := range avroEvents {
+		avroEvt := avroEvt
 		avroEvt.checkType(s.cfg.Namespace)
 		envs[i] = &avroEvt
 	}
