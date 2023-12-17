@@ -84,7 +84,7 @@ func TestEventIndexer(t *testing.T) {
 			if err != nil {
 				t.Fatal("expect err be nil, got", err)
 			}
-			events, err := UnmarshalRecord(rr, ser)
+			events, err := UnmarshalRecord(ctx, rr, ser)
 			if err != nil {
 				t.Fatal("expect err be nil, got", err)
 			}
@@ -123,7 +123,7 @@ func TestEventIndexer(t *testing.T) {
 			if err != nil {
 				t.Fatal("expect err be nil, got", err)
 			}
-			events, err = UnmarshalRecord(rr, ser)
+			events, err = UnmarshalRecord(ctx, rr, ser)
 			if err != nil {
 				t.Fatal("expect err be nil, got", err)
 			}
@@ -145,7 +145,7 @@ func TestEventIndexer(t *testing.T) {
 			if err != nil {
 				t.Fatal("expect err be nil, got", err)
 			}
-			events, err = UnmarshalRecord(rr, ser)
+			events, err = UnmarshalRecord(ctx, rr, ser)
 			if err != nil {
 				t.Fatal("expect err be nil, got", err)
 			}
@@ -164,7 +164,7 @@ func TestEventIndexer(t *testing.T) {
 			if err != nil {
 				t.Fatal("expect err be nil, got", err)
 			}
-			events, err = UnmarshalRecord(rr, ser)
+			events, err = UnmarshalRecord(ctx, rr, ser)
 			if err != nil {
 				t.Fatal("expect err be nil, got", err)
 			}

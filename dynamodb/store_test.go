@@ -11,7 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/expression"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/ln80/event-store/event"
-	test_suite "github.com/ln80/event-store/testutil/suite"
+	"github.com/ln80/event-store/testutil"
 )
 
 func TestNewEventStore(t *testing.T) {
@@ -62,13 +62,13 @@ func TestEventStore(t *testing.T) {
 
 	withTable(t, dbsvc, func(table string) {
 
-		test_suite.EventStoreTest(t, ctx, NewEventStore(dbsvc, table))
+		testutil.TestEventLoggingStore(t, ctx, NewEventStore(dbsvc, table))
 
-		test_suite.EventSourcingStoreTest(t, ctx, NewEventStore(dbsvc, table))
+		testutil.TestEventSourcingStore(t, ctx, NewEventStore(dbsvc, table))
 
 		indexer := NewIndexer(dbsvc, table)
 
-		test_suite.EventStreamerSuite(t, ctx, NewEventStore(dbsvc, table), func(opt *test_suite.EventStreamerSuiteOptions) {
+		testutil.TestEventStreamer(t, ctx, NewEventStore(dbsvc, table), func(opt *testutil.TestEventStreamerOptions) {
 
 			// turn on this option so we can test replay event in DESC order / get recent
 			opt.SupportOrderDESC = true

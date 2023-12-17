@@ -1,4 +1,4 @@
-package test_suite
+package testutil
 
 import (
 	"context"
@@ -6,19 +6,18 @@ import (
 	"testing"
 
 	"github.com/ln80/event-store/event"
-	"github.com/ln80/event-store/testutil"
 )
 
-type EventStreamerSuiteOptions struct {
+type TestEventStreamerOptions struct {
 	PostAppend       func(id event.StreamID)
 	SupportOrderDESC bool
 }
 
-func EventStreamerSuite(t *testing.T, ctx context.Context, store interface {
+func TestEventStreamer(t *testing.T, ctx context.Context, store interface {
 	event.Streamer
 	event.Store
-}, opts ...func(*EventStreamerSuiteOptions)) {
-	opt := &EventStreamerSuiteOptions{
+}, opts ...func(*TestEventStreamerOptions)) {
+	opt := &TestEventStreamerOptions{
 		PostAppend: func(id event.StreamID) {
 		},
 		SupportOrderDESC: false,
@@ -47,17 +46,17 @@ func EventStreamerSuite(t *testing.T, ctx context.Context, store interface {
 	streamID2 := event.NewStreamID(globalID, "service2")
 
 	// append events to sub-streams
-	if err := store.Append(ctx, streamID1, event.Wrap(ctx, streamID1, testutil.GenEvents(10))); err != nil {
+	if err := store.Append(ctx, streamID1, event.Wrap(ctx, streamID1, GenEvents(10))); err != nil {
 		t.Fatalf("expect to append events, got err: %v", err)
 	}
 	opt.PostAppend(streamID1)
 
-	if err := store.Append(ctx, streamID2, event.Wrap(ctx, streamID2, testutil.GenEvents(15))); err != nil {
+	if err := store.Append(ctx, streamID2, event.Wrap(ctx, streamID2, GenEvents(15))); err != nil {
 		t.Fatalf("expect to append events, got err: %v", err)
 	}
 	opt.PostAppend(streamID2)
 
-	t.Run("basic", func(t *testing.T) {
+	t.Run("streamer basic", func(t *testing.T) {
 
 		events := make([]event.Envelope, 0)
 		q := event.StreamerQuery{}
@@ -97,19 +96,24 @@ func EventStreamerSuite(t *testing.T, ctx context.Context, store interface {
 				t.Fatalf("expect events count be %d, got %d", want, l)
 			}
 
+			// TBD wether or not support version prior to go.1.23.10
+			// sort.Slice(descEvents, func(a, b int) bool {
+			// 	return descEvents[a].GlobalVersion().Compare(descEvents[b].GlobalVersion()) >= 0
+			// })
+
 			slices.SortFunc(descEvents, func(a, b event.Envelope) int {
 				return a.GlobalVersion().Compare(b.GlobalVersion())
 			})
 
 			for i := 0; i < len(events); i++ {
-				if want, got := events[i], descEvents[i]; !testutil.CmpEnv(want, got) {
-					t.Fatalf("expect %v, %v be equals", testutil.FormatEnv(want), testutil.FormatEnv(got))
+				if want, got := events[i], descEvents[i]; !CmpEnv(want, got) {
+					t.Fatalf("expect %v, %v be equals", FormatEnv(want), FormatEnv(got))
 				}
 			}
 		}
 	})
 
-	t.Run("with_limit", func(t *testing.T) {
+	t.Run("streamer with limit", func(t *testing.T) {
 		// get first record events
 		firstRecordEvents := make([]event.Envelope, 0)
 		q := event.StreamerQuery{
@@ -154,7 +158,7 @@ func EventStreamerSuite(t *testing.T, ctx context.Context, store interface {
 		}
 	})
 
-	t.Run("advanced", func(t *testing.T) {
+	t.Run("streamer advanced", func(t *testing.T) {
 
 		events := make([]event.Envelope, 0)
 		q := event.StreamerQuery{
@@ -186,6 +190,5 @@ func EventStreamerSuite(t *testing.T, ctx context.Context, store interface {
 				t.Fatalf("expect events count be %d, got %d", want, l)
 			}
 		}
-
 	})
 }

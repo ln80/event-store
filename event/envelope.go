@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"time"
-
-	intevent "github.com/ln80/event-store/internal/event"
 )
 
 // Envelope wraps and adds meta-data to events such us timestamp, stream ID, version
@@ -36,6 +34,7 @@ type RWEnvelope interface {
 	SetGlobalVersion(v Version) Envelope
 	SetDests(dests []string) Envelope
 	SetTTL(ttl time.Duration) Envelope
+	SetNamespace(nspace string) Envelope
 }
 
 type EnvelopeOption func(env RWEnvelope)
@@ -64,6 +63,12 @@ func WithVersionIncr(startingVer Version, limit int, diff VersionSequenceDiff) E
 		default:
 			panic(errors.New("invalid version sequence diff"))
 		}
+	}
+}
+
+func WithNameSpace(nspace string) EnvelopeOption {
+	return func(env RWEnvelope) {
+		env.SetNamespace(nspace)
 	}
 }
 
@@ -103,25 +108,34 @@ func Wrap(ctx context.Context, stmID StreamID, events []any, opts ...EnvelopeOpt
 		if evt == nil {
 			continue
 		}
+
 		env := &envelope{
 			globalStreamID: stmID.GlobalID(),
 			streamID:       stmID.String(),
 			event:          evt,
-			eType:          TypeOfWithContext(ctx, evt),
 			eID:            UID().String(),
 			at:             time.Now().UTC(),
 			dests:          eventDests(ctx, evt),
 		}
+
 		if ctx.Value(ContextUserKey) != nil {
 			user := ctx.Value(ContextUserKey).(string)
 			env.SetUser(user)
 		}
+
 		for _, opt := range opts {
 			if opt == nil {
 				continue
 			}
 			opt(env)
 		}
+
+		if env.namespace != "" {
+			env.eType = TypeOfWithNamespace(env.namespace, evt)
+		} else {
+			env.eType = TypeOfWithContext(ctx, evt)
+		}
+
 		envs = append(envs, env)
 	}
 	return envs
@@ -139,6 +153,7 @@ type envelope struct {
 	globalVersion  Version
 	dests          []string
 	ttl            time.Duration
+	namespace      string
 }
 
 var _ Envelope = &envelope{}
@@ -235,7 +250,13 @@ func (e *envelope) SetTTL(ttl time.Duration) Envelope {
 	return e
 }
 
-var _ intevent.Transformer = &envelope{}
+// SetTTL implements the SetTTL method of the RWEnvelop interface
+func (e *envelope) SetNamespace(nspace string) Envelope {
+	e.namespace = nspace
+	return e
+}
+
+var _ Transformer = &envelope{}
 
 func (e *envelope) Transform(fn func(any) any) {
 	e.event = fn(e.event)

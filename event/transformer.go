@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"reflect"
-
-	intevent "github.com/ln80/event-store/internal/event"
 )
+
+type Transformer interface {
+	Transform(fn func(curr any) any)
+}
 
 // copyEvent copies event data to preserve original copy.
 // It returns a pointer to a copy of the origin value.
@@ -60,7 +62,7 @@ func Transform(ctx context.Context, envs []Envelope, fn func(ctx context.Context
 			continue
 		}
 		// ignore envelopes that don't satisfy Transformer interface
-		if _, ok := env.(intevent.Transformer); !ok {
+		if _, ok := env.(Transformer); !ok {
 			continue
 		}
 
@@ -85,7 +87,7 @@ func Transform(ctx context.Context, envs []Envelope, fn func(ctx context.Context
 
 	for idx, d := range index {
 		d := d
-		envs[idx].(intevent.Transformer).Transform(func(curr any) any {
+		envs[idx].(Transformer).Transform(func(curr any) any {
 			return d
 		})
 	}

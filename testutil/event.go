@@ -2,11 +2,27 @@ package testutil
 
 import (
 	"fmt"
+	"math/rand"
 	"reflect"
 	"strconv"
+	"time"
 
 	"github.com/ln80/event-store/event"
 )
+
+const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
+
+func generateRandomText(length int) string {
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+	}
+	return string(b)
+}
 
 const (
 	Dest2 = "dest2"
@@ -16,8 +32,10 @@ type Event1 struct {
 	Val string
 }
 type Event2 struct {
-	ID  string `pii:"subjectID"`
-	Val string `pii:"data"`
+	ID         string `pii:"subjectID"`
+	Val        string `pii:"data"`
+	LongText   string
+	MediumText string `aliases:"Medium"`
 }
 
 func (e *Event2) EvDests() []string {
@@ -31,7 +49,14 @@ func GenEvents(count int) []any {
 	for i := 0; i < count; i++ {
 		var evt any
 		if i%2 == 0 {
-			evt = &Event2{ID: strconv.Itoa(i), Val: "val " + strconv.Itoa(i)}
+			evt = &Event2{
+				ID:  strconv.Itoa(i),
+				Val: "val " + strconv.Itoa(i),
+
+				LongText: generateRandomText(100),
+
+				MediumText: generateRandomText(50),
+			}
 		} else {
 			evt = &Event1{"val " + strconv.Itoa(i)}
 		}
@@ -66,6 +91,6 @@ func CmpEnv(env1, env2 event.Envelope) bool {
 
 func RegisterEvent(namespace string) event.Register {
 	return event.NewRegister(namespace).
-		Set(Event1{}).
-		Set(Event2{})
+		Set(&Event1{}).
+		Set(&Event2{})
 }

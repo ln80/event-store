@@ -1,10 +1,12 @@
-//go:build integ
+// go:build integ
 
 package main
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -12,11 +14,12 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	"github.com/ln80/event-store/avro"
+	"github.com/ln80/event-store/avro/glue"
 	"github.com/ln80/event-store/dynamodb"
 	"github.com/ln80/event-store/event"
 	"github.com/ln80/event-store/stack/elastic/utils"
 	"github.com/ln80/event-store/testutil"
-	test_suite "github.com/ln80/event-store/testutil/suite"
 )
 
 func init() {
@@ -35,6 +38,7 @@ func TestIntegration(t *testing.T) {
 	// init aws config
 	cfg, err := config.LoadDefaultConfig(
 		ctx,
+		config.WithRegion("eu-west-1"),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -51,7 +55,7 @@ func TestIntegration(t *testing.T) {
 	}
 	stack := output.Stacks[0]
 	var (
-		table, queueUrl string
+		table, queueUrl, registryName string
 	)
 	for _, output := range stack.Outputs {
 		switch *output.OutputKey {
@@ -59,33 +63,42 @@ func TestIntegration(t *testing.T) {
 			table = *output.OutputValue
 		case "ConsumerQueueUrl":
 			queueUrl = *output.OutputValue
+		case "SchemaRegistryName":
+			registryName = *output.OutputValue
 		}
 	}
-	if table == "" || queueUrl == "" {
-		t.Fatal("missed stack params", table, queueUrl)
+	if table == "" || queueUrl == "" || registryName == "" {
+		t.Fatal("missed stack params", table, queueUrl, registryName)
 	}
-	t.Log("stack params", table, queueUrl)
+	t.Log("stack params", table, queueUrl, registryName)
 
-	// init dynamodb event store client
-	store := dynamodb.NewEventStore(utils.InitDynamodbClient(cfg), table)
+	serializer := avro.NewEventSerializer(
+		ctx,
+		glue.NewRegistry(
+			registryName,
+			utils.InitGlueClient(cfg),
+		),
+		func(esc *avro.EventSerializerConfig) {
+			esc.Namespace = ""
+		},
+	)
 
-	// test event-logging use cases
-	test_suite.EventStoreTest(t, ctx, store)
+	store := dynamodb.NewEventStore(utils.InitDynamodbClient(cfg), table, func(sc *dynamodb.StoreConfig) {
+		sc.Serializer = serializer
+	})
 
-	// test event-sourcing use cases
-	test_suite.EventSourcingStoreTest(t, ctx, store)
+	testutil.TestEventLoggingStore(t, ctx, store)
 
-	// test replay the global stream use cases
-	test_suite.EventStreamerSuite(t, ctx, store, func(opt *test_suite.EventStreamerSuiteOptions) {
+	testutil.TestEventSourcingStore(t, ctx, store)
+
+	testutil.TestEventStreamer(t, ctx, store, func(opt *testutil.TestEventStreamerOptions) {
 		// wait for global stream indexing (asynchronous)
 		opt.PostAppend = func(id event.StreamID) {
 			time.Sleep(1 * time.Second)
 		}
 	})
 
-	// previous tests, for sure, added events to different streams
-	// the following test must receive messages from the integration test's SQS queue
-	// retry logic allows to deal with the asynchronous nature of the publishing process
+	// assert that a sample of events were forwarded to consumer queue
 	if err := retry(2, time.Second, func() error {
 		output, err := sqs.NewFromConfig(cfg).ReceiveMessage(ctx, &sqs.ReceiveMessageInput{
 			QueueUrl:            &queueUrl,
@@ -94,12 +107,23 @@ func TestIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to receive messages: %v", err)
 		}
-
 		if len(output.Messages) == 0 {
 			return errors.New("empty messages result")
 		}
 
 		t.Logf("%d message received", len(output.Messages))
+
+		for _, msg := range output.Messages {
+			b, err := base64.StdEncoding.DecodeString(*msg.Body)
+			if err != nil {
+				return fmt.Errorf("decode bas64 failed: %v", err)
+			}
+			evt, err := serializer.UnmarshalEvent(ctx, b)
+			if err != nil {
+				return fmt.Errorf("unmarshal received event failed: %v", err)
+			}
+			t.Logf("received evt %+v", testutil.FormatEnv(evt))
+		}
 
 		return nil
 	}); err != nil {

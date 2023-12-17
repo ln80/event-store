@@ -1,6 +1,7 @@
 package dynamodb
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -35,12 +36,12 @@ func recordRangeKeyWithVersion(stmID event.StreamID, ver event.Version) string {
 	return fmt.Sprintf("%s@v_%s", strings.Join(stmID.Parts(), event.StreamIDPartsDelimiter), ver.Trunc().String())
 }
 
-func UnmarshalRecord(r Record, serializer event.Serializer) ([]event.Envelope, error) {
+func UnmarshalRecord(ctx context.Context, r Record, serializer event.Serializer) ([]event.Envelope, error) {
 	if len(r.Events) == 0 {
 		return nil, nil
 	}
 
-	events, err := serializer.UnmarshalEventBatch(r.Events)
+	events, err := serializer.UnmarshalEventBatch(ctx, r.Events)
 	if err != nil {
 		return nil, err
 	}

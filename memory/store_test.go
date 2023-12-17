@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/ln80/event-store/testutil"
-	test_suite "github.com/ln80/event-store/testutil/suite"
 )
 
 func TestEventStore(t *testing.T) {
@@ -13,9 +12,9 @@ func TestEventStore(t *testing.T) {
 
 	ctx := context.Background()
 
-	test_suite.EventStoreTest(t, ctx, NewEventStore())
-	test_suite.EventSourcingStoreTest(t, ctx, NewEventStore())
-	test_suite.EventStreamerSuite(t, ctx, NewEventStore(), func(opt *test_suite.EventStreamerSuiteOptions) {
+	testutil.TestEventLoggingStore(t, ctx, NewEventStore())
+	testutil.TestEventSourcingStore(t, ctx, NewEventStore())
+	testutil.TestEventStreamer(t, ctx, NewEventStore(), func(opt *testutil.TestEventStreamerOptions) {
 
 		opt.SupportOrderDESC = true
 	})

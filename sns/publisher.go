@@ -2,6 +2,7 @@ package sns
 
 import (
 	"context"
+	"sort"
 	"strings"
 
 	"slices"
@@ -78,10 +79,12 @@ func (p *Publisher) publish(ctx context.Context, events []event.Envelope) error 
 	// - batch message size limit is the same as the size a single message using Publish method
 	// - The retry logic of partially failed batch might corrupt the publishing order (TODO: add link to docs).
 	for _, evt := range events {
-		msg, _, err := p.Serializer.MarshalEvent(evt)
+		msg, _, err := p.Serializer.MarshalEvent(ctx, evt)
 		if err != nil {
 			return err
 		}
+		// body := base64.StdEncoding.EncodeToString(msg)
+		body := string(msg)
 
 		attributes := map[string]types.MessageAttributeValue{
 			"StmID": {
@@ -101,7 +104,7 @@ func (p *Publisher) publish(ctx context.Context, events []event.Envelope) error 
 		}
 
 		if _, err = p.svc.Publish(ctx, &sns.PublishInput{
-			Message:                aws.String(string(msg)),
+			Message:                aws.String(body),
 			TopicArn:               aws.String(p.topic),
 			MessageAttributes:      attributes,
 			MessageDeduplicationId: aws.String(evt.GlobalStreamID() + "@" + evt.GlobalVersion().String()),
@@ -116,10 +119,12 @@ func (p *Publisher) publish(ctx context.Context, events []event.Envelope) error 
 }
 
 func (p *Publisher) publishRecord(ctx context.Context, events []event.Envelope) error {
-	record, _, err := p.Serializer.MarshalEventBatch(events)
+	record, _, err := p.Serializer.MarshalEventBatch(ctx, events)
 	if err != nil {
 		return err
 	}
+	// body := base64.StdEncoding.EncodeToString(record)
+	body := string(record)
 
 	_types := make([]string, 0)
 	for _, evt := range events {
@@ -129,11 +134,14 @@ func (p *Publisher) publishRecord(ctx context.Context, events []event.Envelope) 
 	_types = slices.Compact(_types)
 
 	dests := make([]string, 0)
-	dests = append(dests)
 	for _, evt := range events {
 		dests = append(dests, evt.Dests()...)
 	}
-	slices.Sort(dests)
+
+	sort.Slice(dests, func(a, b int) bool {
+		return dests[a] <= dests[b]
+	})
+	// slices.Sort(dests)
 	dests = slices.Compact(dests)
 
 	attributes := map[string]types.MessageAttributeValue{
@@ -149,7 +157,7 @@ func (p *Publisher) publishRecord(ctx context.Context, events []event.Envelope) 
 		}
 	}
 	_, err = p.svc.Publish(ctx, &sns.PublishInput{
-		Message:                aws.String(string(record)),
+		Message:                aws.String(body),
 		TopicArn:               aws.String(p.topic),
 		MessageAttributes:      attributes,
 		MessageDeduplicationId: aws.String(events[0].GlobalStreamID() + "@" + events[0].GlobalVersion().String()),

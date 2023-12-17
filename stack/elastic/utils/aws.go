@@ -6,6 +6,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/glue"
 	"github.com/aws/aws-sdk-go-v2/service/sns"
 )
 
@@ -15,6 +16,10 @@ func InitDynamodbClient(cfg aws.Config) *dynamodb.Client {
 
 func InitSNSClient(cfg aws.Config) *sns.Client {
 	return sns.NewFromConfig(cfg)
+}
+
+func InitGlueClient(cfg aws.Config) *glue.Client {
+	return glue.NewFromConfig(cfg)
 }
 
 // HackCtx to workaround https://github.com/aws/aws-sam-cli/issues/2510

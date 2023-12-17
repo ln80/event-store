@@ -39,7 +39,7 @@ func makeHandler(pub event.Publisher, ser event.Serializer) handler {
 				if rec.HashKey == "" {
 					continue
 				}
-				events, err := dynamodb.UnmarshalRecord(rec, ser)
+				events, err := dynamodb.UnmarshalRecord(ctx, rec, ser)
 				if err != nil {
 					return err
 				}
