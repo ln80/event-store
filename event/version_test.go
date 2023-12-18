@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"strings"
-	"sync"
 	"testing"
 )
 
@@ -180,18 +179,14 @@ func TestVersion_Incr(t *testing.T) {
 	}
 
 	assertPanic := func(t *testing.T, fn func(), err error) {
-		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() {
+		func() {
 			defer func() {
 				if wanterr, r := err, recover(); r == nil || !strings.Contains(fmt.Sprintf("%v", r), err.Error()) {
 					t.Fatalf("expect panic with err %v, got %v", wanterr, r)
 				}
 			}()
-			defer wg.Done()
 			fn()
 		}()
-		wg.Wait()
 	}
 
 	ver := NewVersion()

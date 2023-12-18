@@ -13,8 +13,6 @@ import (
 
 type event1 struct{ Val string }
 
-type event2 struct{ Val string }
-
 func TestEventPublisher(t *testing.T) {
 	ctx := context.Background()
 

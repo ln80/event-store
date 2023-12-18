@@ -2,7 +2,7 @@ package memory
 
 import (
 	"context"
-	"slices"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -206,8 +206,11 @@ func (s *Store) Replay(ctx context.Context, id event.StreamID, q event.StreamerQ
 	}
 
 	// default order is ASC
-	slices.SortFunc(envs, func(a, b event.Envelope) int {
-		return a.GlobalVersion().Compare(b.GlobalVersion())
+	// slices.SortFunc(envs, func(a, b event.Envelope) int {
+	// 	return a.GlobalVersion().Compare(b.GlobalVersion())
+	// })
+	sort.Slice(envs, func(i, j int) bool {
+		return envs[i].GlobalVersion().Compare(envs[j].GlobalVersion()) <= 0
 	})
 
 	// prepare query params
@@ -240,8 +243,11 @@ func (s *Store) Replay(ctx context.Context, id event.StreamID, q event.StreamerQ
 	}
 
 	if q.Order == event.StreamerReplayOrderDESC {
-		slices.SortFunc(fenvs, func(a, b event.Envelope) int {
-			return a.GlobalVersion().Compare(b.GlobalVersion()) * -1
+		// slices.SortFunc(fenvs, func(a, b event.Envelope) int {
+		// 	return a.GlobalVersion().Compare(b.GlobalVersion()) * -1
+		// })
+		sort.Slice(fenvs, func(i, j int) bool {
+			return fenvs[i].GlobalVersion().Compare(fenvs[j].GlobalVersion()) >= 0
 		})
 	}
 

@@ -1,0 +1,86 @@
+name: Go Module
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        go-version: [ "1.20", "1.21" ]
+    runs-on: ubuntu-latest
+    
+    services:
+      dynamodb:
+        image: amazon/dynamodb-local
+        ports:
+          - 8070:8000
+      
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: "0"
+
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - name: Install Dependencies
+        run: |
+          go mod download
+
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+          
+      - name: Run Unit & Functional tests
+        run: |
+          make test/ci
+        env:
+          DYNAMODB_ENDPOINT: http://localhost:8070
+
+
+  release:
+    needs: [test]
+    if: ${{ (github.event_name == 'push') }}
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: "0"
+      
+      - name: Verify Module Version Changed
+        uses: tj-actions/changed-files@v19
+        id: version-changed
+        with:
+          files: |
+              version.go
+
+      - name: Read New Version
+        if: ${{ (steps.version-changed.outputs.any_changed == 'true') && (github.event_name == 'push') }}
+        run: |
+          grep 'const MODULE_VERSION' version.go | sed -e 's/const MODULE_VERSION Version = "\(v[^"]*\)"/MODULE_VERSION=\1/' >> $GITHUB_ENV
+
+      - name: Dump New Version
+        if: ${{ env.MODULE_VERSION != '' }}
+        run: |
+          echo ${{ env.MODULE_VERSION }}
+
+      - name: "Release Module New Version"
+        if: ${{ env.MODULE_VERSION != '' }}
+        run: |
+          tag=${{ env.MODULE_VERSION }}
+          msg="${{ github.event.head_commit.message }}"
+          git config user.name "${GITHUB_ACTOR}"
+          git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+          git tag -a "${tag}" -m "${msg}"
+          git push origin "${tag}" 
