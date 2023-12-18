@@ -1,4 +1,4 @@
-name: Security Check
+name: Security Checks
 on:
   push:
     branches: [main]
@@ -7,7 +7,6 @@ on:
 
 jobs:
   security:
-    name: Inspect for security problems
     runs-on: ubuntu-latest
 
     steps:

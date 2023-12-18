@@ -71,13 +71,11 @@ jobs:
           grep 'const MODULE_VERSION' version.go | sed -e 's/const MODULE_VERSION Version = "\(v[^"]*\)"/MODULE_VERSION=\1/' >> $GITHUB_ENV
 
       - name: Dump New Version
-        # if: ${{ (steps.version-changed.outputs.any_changed == 'true') && (github.event_name == 'push') }}
         if: ${{ env.MODULE_VERSION != '' }}
         run: |
           echo ${{ env.MODULE_VERSION }}
 
       - name: "Release Module New Version"
-        # if: ${{ (steps.version-changed.outputs.any_changed == 'true') && (github.event_name == 'push') }}
         if: ${{ env.MODULE_VERSION != '' }}
         run: |
           tag=${{ env.MODULE_VERSION }}

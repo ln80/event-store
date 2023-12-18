@@ -1,4 +1,4 @@
-name: Lint
+name: Linter
 on:
   push:
     branches: [main]
@@ -7,7 +7,6 @@ on:
 
 jobs:
   lint:
-    name: Defaults & Misspelling
     runs-on: ubuntu-latest
     steps:
       - name: Setup Go
