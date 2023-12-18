@@ -84,7 +84,7 @@ func TestMain(m *testing.M) {
 		return
 	}
 	dbsvc = dynamodb.NewFromConfig(cfg, func(o *dynamodb.Options) {
-		o.EndpointResolver = dynamodb.EndpointResolverFromURL(endpoint)
+		o.BaseEndpoint = &endpoint
 	})
 
 	testutil.RegisterEvent("")

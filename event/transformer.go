@@ -53,7 +53,7 @@ func copyEvent(env Envelope) (any, error) {
 // Transform the given slice of events by replacing the data (aka domain event)
 // with the result of fn function.
 // It copy first values and perform transformation on the copies.
-// It preserve events values of all events if any error has occured during a mutation.
+// It preserve events values of all events if any error has occurred during a mutation.
 func Transform(ctx context.Context, envs []Envelope, fn func(ctx context.Context, copyPtrs ...any) error) error {
 	index := make(map[int]any)
 	copyPtrs := []any{}

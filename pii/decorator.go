@@ -68,7 +68,9 @@ func (s *Decorator) Replay(ctx context.Context, stmID event.StreamID, f event.St
 	ph := func(ctx context.Context, data event.StreamData) error {
 		if data.Type == event.StreamDataTypeRecord {
 			events := []event.Envelope{data.Value.(event.Envelope)}
-			event.Transform(ctx, events, fn)
+			if err := event.Transform(ctx, events, fn); err != nil {
+				return err
+			}
 			data.Value = events[0]
 		}
 

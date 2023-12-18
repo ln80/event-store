@@ -1,4 +1,4 @@
-name: Go Security Checker
+name: Security Check
 on:
   push:
     branches: [main]

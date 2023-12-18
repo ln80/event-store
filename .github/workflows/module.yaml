@@ -1,4 +1,4 @@
-name: Go Module Test and Release
+name: Go Module
 
 on:
   push:

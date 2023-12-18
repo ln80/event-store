@@ -300,7 +300,9 @@ func (s *Store) doAppend(ctx context.Context, id event.StreamID, ver *event.Vers
 	explicitTx := false
 	if !ses.HasTx() && opt.AddToTx != nil {
 		explicitTx = true
-		ses.StartTx()
+		if err := ses.StartTx(); err != nil {
+			return err
+		}
 		txItems := opt.AddToTx(ctx)
 		for _, txItem := range txItems {
 			var err error

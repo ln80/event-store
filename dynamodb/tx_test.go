@@ -70,7 +70,9 @@ func TestTx_Operations(t *testing.T) {
 	withTable(t, dbsvc, func(table string) {
 		ses := NewSession(dbsvc)
 
-		ses.StartTx()
+		if err := ses.StartTx(); err != nil {
+			t.Fatalf("expect err be nil, got %v", err)
+		}
 
 		mitem0, _ := attributevalue.MarshalMap(TestItem{
 			Item: Item{
