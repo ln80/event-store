@@ -5,8 +5,6 @@ import (
 	"sort"
 	"strings"
 
-	"slices"
-
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/sns"
 	"github.com/aws/aws-sdk-go-v2/service/sns/types"
@@ -130,8 +128,13 @@ func (p *Publisher) publishRecord(ctx context.Context, events []event.Envelope) 
 	for _, evt := range events {
 		_types = append(_types, evt.Type())
 	}
-	slices.Sort(_types)
-	_types = slices.Compact(_types)
+	// slices.Sort(_types)
+	sort.Slice(_types, func(i, j int) bool {
+		return _types[i] <= _types[j]
+	})
+
+	// _types = slices.Compact(_types)
+	_types = p.compact(_types)
 
 	dests := make([]string, 0)
 	for _, evt := range events {
@@ -142,7 +145,9 @@ func (p *Publisher) publishRecord(ctx context.Context, events []event.Envelope) 
 		return dests[a] <= dests[b]
 	})
 	// slices.Sort(dests)
-	dests = slices.Compact(dests)
+
+	// dests = slices.Compact(dests)
+	dests = p.compact(dests)
 
 	attributes := map[string]types.MessageAttributeValue{
 		"Types": {
@@ -165,4 +170,20 @@ func (p *Publisher) publishRecord(ctx context.Context, events []event.Envelope) 
 	})
 
 	return err
+}
+
+func (p *Publisher) compact(s []string) []string {
+	if len(s) < 2 {
+		return s
+	}
+	i := 1
+	for k := 1; k < len(s); k++ {
+		if s[k] != s[k-1] {
+			if i != k {
+				s[i] = s[k]
+			}
+			i++
+		}
+	}
+	return s[:i]
 }

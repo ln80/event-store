@@ -14,16 +14,6 @@ jobs:
         image: amazon/dynamodb-local
         ports:
           - 8070:8000
-      # minio:
-      #   image: minio/minio:edge-cicd
-      #   ports:
-      #     - 8071:9000
-      #   env:
-      #     MINIO_ROOT_USER: minioadmin
-      #     MINIO_ROOT_PASSWORD: minioadmin
-      #   options: >-
-      #     --name=minio 
-      #     --health-cmd "curl http://localhost:9000/minio/health/live"
       
     steps:
       - uses: actions/checkout@v4
@@ -33,7 +23,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v4
         with:
-          go-version: "1.21.3"
+          go-version: "1.20"
 
       - name: Setup Go
         run: |
@@ -44,7 +34,6 @@ jobs:
           make test/ci
         env:
           DYNAMODB_ENDPOINT: http://localhost:8070
-          # S3_ENDPOINT: http://localhost:8071
 
       - name: Verify Version Changed
         uses: tj-actions/changed-files@v19
@@ -56,13 +45,13 @@ jobs:
       - name: Read Current Version
         if: ${{ (steps.version-changed.outputs.any_changed == 'true') && (github.event_name == 'push') }}
         run: |
-          grep 'const VERSION' version.go | sed -e 's/const VERSION Version = "\(v[^"]*\)"/ES_VERSION=\1/' >> $GITHUB_ENV
+          grep 'const VERSION' version.go | sed -e 's/const MODULE_VERSION Version = "\(v[^"]*\)"/MODULE_VERSION=\1/' >> $GITHUB_ENV
       
       - name: "Release Module"
         # if: ${{ (steps.version-changed.outputs.any_changed == 'true') && (github.event_name == 'push') }}
-        if: ${{ env.ES_VERSION != '' }}
+        if: ${{ (env.MODULE_VERSION != '') && (github.event_name == 'push') }}
         run: |
-          tag=${{ env.ES_VERSION }}
+          tag=${{ env.MODULE_VERSION }}
           msg="${{ github.event.head_commit.message }}"
           git config user.name "${GITHUB_ACTOR}"
           git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"

@@ -2,7 +2,7 @@ package testutil
 
 import (
 	"context"
-	"slices"
+	"sort"
 	"testing"
 
 	"github.com/ln80/event-store/event"
@@ -96,13 +96,11 @@ func TestEventStreamer(t *testing.T, ctx context.Context, store interface {
 				t.Fatalf("expect events count be %d, got %d", want, l)
 			}
 
-			// TBD wether or not support version prior to go.1.23.10
-			// sort.Slice(descEvents, func(a, b int) bool {
-			// 	return descEvents[a].GlobalVersion().Compare(descEvents[b].GlobalVersion()) >= 0
+			// slices.SortFunc(descEvents, func(a, b event.Envelope) int {
+			// 	return a.GlobalVersion().Compare(b.GlobalVersion())
 			// })
-
-			slices.SortFunc(descEvents, func(a, b event.Envelope) int {
-				return a.GlobalVersion().Compare(b.GlobalVersion())
+			sort.Slice(descEvents, func(i, j int) bool {
+				return descEvents[i].GlobalVersion().Compare(descEvents[j].GlobalVersion()) <= 0
 			})
 
 			for i := 0; i < len(events); i++ {
