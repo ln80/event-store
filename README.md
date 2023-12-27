@@ -1,4 +1,7 @@
+
 # Event Store
+[![Coverage Status](https://coveralls.io/repos/github/ln80/event-store/badge.svg?branch=main)](https://coveralls.io/github/ln80/event-store?branch=main)
+![ci status](https://github.com/ln80/event-store/actions/workflows/module.yml/badge.svg)
 
 A **serverless-first** kit that simplifies the use of **event-sourcing** and **event-logging** patterns.
 

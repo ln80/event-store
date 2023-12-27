@@ -47,11 +47,14 @@ jobs:
         env:
           DYNAMODB_ENDPOINT: http://localhost:8070
 
-      - name: Upload Test Coverage
-        # if: ${{ (github.event_name == 'push') }}
-        run: |
-          go install github.com/mattn/goveralls@latest
-          goveralls -coverprofile=coverage.out -repotoken=${{ secrets.COVERALLS_TOKEN }}
+      - name: Convert coverage.out to coverage.lcov
+        uses: jandelgado/gcov2lcov-action@v1
+
+      - name: Coveralls
+        uses: coverallsapp/github-action@v2.2.3
+        with:
+            github-token: ${{ secrets.GITHUB_TOKEN }}
+            path-to-lcov: coverage.lcov
 
   release:
     needs: [test]
