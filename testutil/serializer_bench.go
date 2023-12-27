@@ -31,6 +31,7 @@ func BenchmarkSerializer(b *testing.B, ser event.Serializer) {
 		// Report the dataSize as a custom metric
 		b.ReportMetric(float64(dataSize/b.N), "size/op")
 	})
+
 	b.Run("unmarshal", func(b *testing.B) {
 		bb, _, err := ser.MarshalEvent(ctx, event.Wrap(ctx, stmID, GenEvents(1))[0])
 		if err != nil {
@@ -39,14 +40,39 @@ func BenchmarkSerializer(b *testing.B, ser event.Serializer) {
 
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
-			e, err := ser.UnmarshalEvent(ctx, bb)
+		e, err := ser.UnmarshalEvent(ctx, bb)
+		if err != nil {
+			b.Fatalf("Error: %v", err)
+		}
+
+		_ = e.Event()
+	})
+
+	b.Run("marshal batch", func(b *testing.B) {
+		for n := 0; n < b.N; n++ {
+			_, _, err := ser.MarshalEventBatch(ctx, event.Wrap(ctx, stmID, GenEvents(100)))
 			if err != nil {
 				b.Fatalf("Error: %v", err)
 			}
-
-			_ = e.Event()
 		}
 	})
 
+	b.Run("unmarshal batch", func(b *testing.B) {
+		bb, _, err := ser.MarshalEventBatch(ctx, event.Wrap(ctx, stmID, GenEvents(100)))
+		if err != nil {
+			b.Fatalf("Error: %v", err)
+		}
+
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			evts, err := ser.UnmarshalEventBatch(ctx, bb)
+			if err != nil {
+				b.Fatalf("Error: %v", err)
+			}
+			for _, evt := range evts {
+				_ = evt.Event()
+			}
+		}
+	})
 }

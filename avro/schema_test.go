@@ -23,6 +23,8 @@ func TestEventSchema(t *testing.T) {
 	a := avro.Config{PartialUnionTypeResolution: false, UnionResolutionError: true}.Freeze()
 	namespace := "service1"
 
+	defer event.NewRegister("service1").Clear()
+
 	type ValueObject1 struct {
 		Uint32 uint32
 	}
@@ -63,12 +65,12 @@ func TestEventSchema(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	evt1 := &Event1{
+	evt1 := Event1{
 		Int64:  10,
 		String: "foo",
 		Bool:   true,
 	}
-	evt2 := &Event2{
+	evt2 := Event2{
 		Bool:  true,
 		Array: []string{"foo", "bar"},
 		NestedObj1: ValueObject1{
@@ -93,10 +95,10 @@ func TestEventSchema(t *testing.T) {
 	// remove old events version form registry
 	event.NewRegister(namespace).Clear()
 
-	defEventA := &EventA{
+	defEventA := EventA{
 		Float64_New: float64(40),
 	}
-	defEventB := &EventB{
+	defEventB := EventB{
 		NestedObj2_New: ValueObject2{
 			Time: Time(time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC)),
 		},
@@ -127,9 +129,9 @@ func TestEventSchema(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rEvt1, ok := resultEvts[0].Event().(*EventA)
+	rEvt1, ok := resultEvts[0].Event().(EventA)
 	if !ok {
-		t.Fatalf("invalid event type expect %T, got %T", &EventA{}, rEvt1)
+		t.Fatalf("invalid event type expect %T, got %T", EventA{}, rEvt1)
 	}
 	if want, got := evt1.Int64, rEvt1.Int64_Changed; want != got {
 		t.Fatalf("expect %v, %v be equals", want, got)
@@ -141,9 +143,9 @@ func TestEventSchema(t *testing.T) {
 		t.Fatalf("expect %v, %v be equals", want, got)
 	}
 
-	rEvt2, ok := resultEvts[1].Event().(*EventB)
+	rEvt2, ok := resultEvts[1].Event().(EventB)
 	if !ok {
-		t.Fatalf("invalid event type expect %T, got %T", &EventB{}, rEvt1)
+		t.Fatalf("invalid event type expect %T, got %T", EventB{}, rEvt1)
 	}
 	if want, got := evt2.Bool, rEvt2.Bool; want != got {
 		t.Fatalf("expect %v, %v be equals", want, got)
@@ -174,5 +176,4 @@ func TestEventSchema(t *testing.T) {
 	if want, got := event.TypeOfWithNamespace(namespace, &EventB{}), resultEvts[1].Type(); !reflect.DeepEqual(want, got) {
 		t.Fatalf("expect %+v, %+v be equals", want, got)
 	}
-
 }

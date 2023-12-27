@@ -2,6 +2,7 @@ package json
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/ln80/event-store/event"
@@ -33,5 +34,25 @@ func TestSerializer(t *testing.T) {
 
 		ser := NewEventSerializer("")
 		testutil.TestSerializer(t, ctx, ser)
+	})
+}
+
+func TestSerializer_WithError(t *testing.T) {
+	testutil.RegisterEvent("")
+
+	ctx := context.Background()
+
+	t.Run("empty event", func(t *testing.T) {
+
+		ser := NewEventSerializer("")
+
+		_, _, err := ser.MarshalEvent(ctx, nil)
+		if want, got := event.ErrMarshalEmptyEvent, err; !errors.Is(got, want) {
+			t.Fatalf("expect %v, %v be equals", want, got)
+		}
+		_, _, err = ser.MarshalEventBatch(ctx, nil)
+		if want, got := event.ErrMarshalEmptyEvent, err; !errors.Is(got, want) {
+			t.Fatalf("expect %v, %v be equals", want, got)
+		}
 	})
 }

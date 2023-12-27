@@ -20,12 +20,12 @@ type MoneyWithdrawn struct {
 
 func (a *Account) onEvent(evt any) {
 	switch ev := evt.(type) {
-	case *AccountOpened:
+	case AccountOpened:
 		a.ID = ev.ID
 		a.OpenedAt = ev.At
-	case *MoneyDeposited:
+	case MoneyDeposited:
 		a.Balance += ev.Amount
-	case *MoneyWithdrawn:
+	case MoneyWithdrawn:
 		a.Balance -= ev.Amount
 	}
 }

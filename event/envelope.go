@@ -34,7 +34,7 @@ type RWEnvelope interface {
 	SetGlobalVersion(v Version) Envelope
 	SetDests(dests []string) Envelope
 	SetTTL(ttl time.Duration) Envelope
-	SetNamespace(nspace string) Envelope
+	SetNamespace(namespace string) Envelope
 }
 
 type EnvelopeOption func(env RWEnvelope)
@@ -45,7 +45,7 @@ func WithVersionIncr(startingVer Version, limit int, diff VersionSequenceDiff) E
 	return func(env RWEnvelope) {
 		// If current event is the last one in the given record
 		// then mark the fractional part of its version as EOF.
-		// Otherwise, accordingly increment the version for the next event
+		// Otherwise, increment the version for the next event.
 		if count == limit-1 {
 			ver = ver.EOF()
 			env.SetVersion(ver)
@@ -115,7 +115,7 @@ func Wrap(ctx context.Context, stmID StreamID, events []any, opts ...EnvelopeOpt
 			event:          evt,
 			eID:            UID().String(),
 			at:             time.Now().UTC(),
-			dests:          eventDests(ctx, evt),
+			dests:          publishDestinations(ctx, evt),
 		}
 
 		if ctx.Value(ContextUserKey) != nil {

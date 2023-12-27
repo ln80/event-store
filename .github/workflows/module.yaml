@@ -43,10 +43,15 @@ jobs:
           
       - name: Run Unit & Functional tests
         run: |
-          make test/ci
+          make ci/test
         env:
           DYNAMODB_ENDPOINT: http://localhost:8070
 
+      - name: Upload Test Coverage
+        # if: ${{ (github.event_name == 'push') }}
+        run: |
+          go install github.com/mattn/goveralls@latest
+          goveralls -coverprofile=coverage.out -repotoken=${{ secrets.COVERALLS_TOKEN }}
 
   release:
     needs: [test]

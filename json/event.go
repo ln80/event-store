@@ -2,11 +2,15 @@ package json
 
 import (
 	"encoding/json"
-	"fmt"
-	"log"
+	"reflect"
 	"time"
 
 	"github.com/ln80/event-store/event"
+	"github.com/ln80/event-store/internal/logger"
+)
+
+var (
+	noEvent = struct{}{}
 )
 
 // convertEvent takes an event.Envelope an convert it to a jsonEvent type.
@@ -82,22 +86,38 @@ func (e *jsonEvent) Type() string {
 // It's up to the client/caller code to tolerate (or not) the empty value.
 func (e *jsonEvent) Event() any {
 	if e.fEvent != nil {
+		if e.fEvent == noEvent {
+			return nil
+		}
 		return e.fEvent
 	}
-	if e.reg == nil {
-		return nil
-	}
-	evt, err := e.reg.Get(e.Type())
 
+	log := logger.Default().
+		WithValues(
+			"stmID", e.StreamID(),
+			"type", e.Type(),
+			"ver", e.Version(),
+		)
+
+	if e.reg == nil {
+		log.V(1).Info("Unexpected empty event data")
+		log.V(3).Info("event registry not found in JSON event")
+		return nil
+	}
+	ptr, err := e.reg.Get(e.Type())
 	if err != nil {
-		log.Println("[WARNING] Unmarshal event data failed", event.Err(err, e.StreamID()))
+		log.V(1).Info("Unexpected empty event data")
+		log.V(3).Info("Event type is not found in event registry: " + err.Error())
+		e.fEvent = noEvent
 		return nil
 	}
-	if err := json.Unmarshal(e.FRawEvent, evt); err != nil {
-		log.Println(event.Err(fmt.Errorf("unmarshal event data failed"), e.StreamID(), err))
+	if err := json.Unmarshal(e.FRawEvent, ptr); err != nil {
+		log.V(1).Info("Unexpected empty event data")
+		log.V(3).Info("Failed to unmarshal JSON event data: " + err.Error())
+		e.fEvent = noEvent
 		return nil
 	}
-	e.fEvent = evt
+	e.fEvent = reflect.ValueOf(ptr).Elem().Interface()
 
 	return e.fEvent
 }
@@ -107,16 +127,12 @@ func (e *jsonEvent) At() time.Time {
 }
 
 func (e *jsonEvent) Version() event.Version {
-	// return event version if already set in the event
 	if !e.fVersion.IsZero() {
 		return e.fVersion
 	}
-	// if not then resolve the version value from the raw value
-	// in case the later is not empty
 	if e.FRawVersion != "" {
 		e.fVersion, _ = event.Ver(e.FRawVersion)
 	}
-	// return zero value as a fallback
 	return e.fVersion
 }
 
@@ -125,8 +141,6 @@ func (e *jsonEvent) User() string {
 }
 
 func (e *jsonEvent) GlobalStreamID() string {
-	// the global stream ID not yet set in the event then
-	// parse the stream value and get global ID part.
 	if e.fGlobalStreamID == "" {
 		stmID, _ := event.ParseStreamID(e.FStreamID)
 		e.fGlobalStreamID = stmID.GlobalID()
@@ -135,15 +149,12 @@ func (e *jsonEvent) GlobalStreamID() string {
 }
 
 func (e *jsonEvent) GlobalVersion() event.Version {
-	// return the global version if already set in the event
 	if !e.fGlobalVersion.IsZero() {
 		return e.fGlobalVersion
 	}
-	// resolve the global stream version from the raw value if the later is not empty
 	if e.FRawGlobalVersion != "" {
 		e.fGlobalVersion, _ = event.Ver(e.FRawGlobalVersion)
 	}
-	// otherwise, return zero value
 	return e.fGlobalVersion
 }
 

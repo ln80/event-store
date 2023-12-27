@@ -22,7 +22,7 @@ func OpenAccount(accountID, owner string) (*Account, error) {
 	a := &Account{}
 	a.SetMutator(a.onEvent)
 
-	a.Apply(&AccountOpened{
+	a.Apply(AccountOpened{
 		Owner: owner,
 		ID:    accountID,
 		At:    time.Now().Unix(),
@@ -46,7 +46,7 @@ func (a *Account) DepositMoney(amount int) error {
 	if amount < 0 {
 		return fmt.Errorf("invalid amount to deposit: %d", amount)
 	}
-	a.Apply(&MoneyDeposited{
+	a.Apply(MoneyDeposited{
 		AccountID: a.ID,
 		Amount:    amount,
 		At:        time.Now().Unix(),
@@ -58,7 +58,7 @@ func (a *Account) WithdrawMoney(amount int) error {
 	if amount < 0 || a.Balance-amount < 0 {
 		return fmt.Errorf("invalid amount to withdraw: %d", amount)
 	}
-	a.Apply(&MoneyWithdrawn{
+	a.Apply(MoneyWithdrawn{
 		AccountID: a.ID,
 		Amount:    amount,
 		At:        time.Now().Unix(),

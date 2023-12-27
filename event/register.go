@@ -9,6 +9,12 @@ import (
 	"sync"
 )
 
+const GlobalRegistryName = ""
+
+var (
+	ErrNotFoundInRegistry = errors.New("event not found in registry")
+)
+
 type registryEntryProps map[string]any
 
 func WithAliases(aliases ...string) func(registryEntryProps) {
@@ -53,29 +59,23 @@ var (
 	registry = make(map[string]map[string]registryEntry)
 )
 
-var (
-	ErrNotFoundInRegistry = errors.New("event not found in registry")
-	ErrConvertEventFailed = errors.New("convert event failed")
-)
-
 // Register defines the registry service for domain events
 type Register interface {
 	// Set register the given event in the registry.
+	// In case the event is pointer it register its value instead.
 	Set(event any, opts ...func(registryEntryProps)) Register
 
-	// Get return an empty instance of the given event type.
-	// Note that it returns the value type, not the pointer
-	Get(name string) (any, error)
+	// Get returns a pointer of a zero type's value.
+	Get(name string) (ptr any, err error)
 
-	// Convert the given event to its equivalent from the global namespace.
-	// the equivalent event in the global namespace must have type named as:
-	// {caller registry namespace}.{event struct name}.
-	// In other words equivalent event package name is the same as caller registry namespace.
-	// Note that it returns a value of the equivalent type from the global namespace not a pointer.
-	Convert(evt any) (any, error)
+	// GetFromGlobal returns a pointer to equivalent event of the given one from the global registry.
+	GetFromGlobal(evt any) (ptr any, err error)
 
+	// All returns all registered events in the current namespace. It returns both event type and
+	// default value.
 	All() map[string]registryEntry
-	// Clear all namespace registries. Its mainly used in internal tests
+
+	// Clear all namespace registries. It's mainly used for internal tests
 	Clear()
 }
 
@@ -102,7 +102,7 @@ func NewRegisterFrom(ctx context.Context) Register {
 	if namespace := ctx.Value(ContextNamespaceKey); namespace != nil {
 		return NewRegister(namespace.(string))
 	}
-	return NewRegister("")
+	return NewRegister(GlobalRegistryName)
 }
 
 // NewRegister returns a Register instance for the given namespace.
@@ -112,21 +112,21 @@ func NewRegister(namespace string) Register {
 	if _, ok := registry[namespace]; !ok {
 		registry[namespace] = make(map[string]registryEntry)
 	}
-	if _, ok := registry[""]; !ok {
-		registry[""] = make(map[string]registryEntry)
+	if _, ok := registry[GlobalRegistryName]; !ok {
+		registry[GlobalRegistryName] = make(map[string]registryEntry)
 	}
 
 	return &register{namespace: namespace}
 }
 
 // Set implements Set method of the Register interface.
-// It registers the given event in the current namespace registry.
-// It uses TypeOfWithNamespace func to solve the event name.
-// By default the event name is "{package name}.{event struct name}""
-// In case of namespace exists, the event name becomes "{namespace}.{event struct name}""
 func (r *register) Set(evt any, opts ...func(registryEntryProps)) Register {
 	name := TypeOfWithNamespace(r.namespace, evt)
 	rType, _ := resolveType(evt)
+
+	if reflect.TypeOf(evt).Kind() == reflect.Ptr {
+		evt = reflect.ValueOf(evt).Elem().Interface()
+	}
 
 	regMu.Lock()
 	defer regMu.Unlock()
@@ -143,13 +143,11 @@ func (r *register) Set(evt any, opts ...func(registryEntryProps)) Register {
 }
 
 // Get implements Get method of the Register interface.
-// It looks for the event in the namespace registry,
-// and use the global namespace's one as fallback
 func (r *register) Get(name string) (any, error) {
 	regMu.Lock()
 	defer regMu.Unlock()
 
-	if r.namespace != "" {
+	if r.namespace != GlobalRegistryName {
 		splits := strings.Split(name, ".")
 		entry, ok := registry[r.namespace][r.namespace+"."+splits[len(splits)-1]]
 		if ok {
@@ -165,10 +163,11 @@ func (r *register) Get(name string) (any, error) {
 	return reflect.New(entry.typ).Interface(), nil
 }
 
-func (r *register) Convert(evt any) (convevt any, err error) {
+// GetFromGlobal implements GetFromGlobal methods of the Register interface.
+func (r *register) GetFromGlobal(evt any) (ptr any, err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("%w: %v", ErrConvertEventFailed, r)
+			err = fmt.Errorf("%w: %v", ErrNotFoundInRegistry, r)
 		}
 	}()
 
@@ -177,17 +176,13 @@ func (r *register) Convert(evt any) (convevt any, err error) {
 	regMu.Lock()
 	defer regMu.Unlock()
 
-	entry, ok := registry[""][name]
+	entry, ok := registry[GlobalRegistryName][name]
 	if !ok {
-		err = fmt.Errorf("%w: %s", ErrNotFoundInRegistry, "during conversion to the equivalent event from global namespace: "+name)
+		err = ErrNotFoundInRegistry
 		return
 	}
-	// in case event is a pointer use its value instead
-	ev := evt
-	if reflect.TypeOf(evt).Kind() == reflect.Ptr {
-		ev = reflect.ValueOf(evt).Elem().Interface()
-	}
-	convevt = reflect.ValueOf(ev).Convert(entry.typ).Interface()
+
+	ptr = reflect.New(entry.typ).Interface()
 	return
 }
 

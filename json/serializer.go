@@ -61,7 +61,6 @@ func (s *eventSerializer) MarshalEventBatch(ctx context.Context, events []event.
 		return
 	}
 
-	// init sizes slice
 	n = make([]int, l)
 
 	// normalize failure, and do not propagate infra error

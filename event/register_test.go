@@ -8,7 +8,7 @@ import (
 	"github.com/ln80/event-store/event/testutil"
 )
 
-func TestRegister(t *testing.T) {
+func TestRegister_Get(t *testing.T) {
 	namespace := "foo"
 	ctx := context.WithValue(context.Background(), ContextNamespaceKey, namespace)
 
@@ -19,12 +19,12 @@ func TestRegister(t *testing.T) {
 		Set(&testutil.Event{}).
 		Set(&testutil.Event2{})
 
-	// get an unregistred event
+	// get an unregistered event
 	if _, err := reg.Get("foo.NoEvent"); !errors.Is(err, ErrNotFoundInRegistry) {
 		t.Fatalf("expect err be %v, got %v", ErrNotFoundInRegistry, err)
 	}
 
-	// successfully find Event in reg
+	// successfully find Event in registry
 	e, err := reg.Get(TypeOf(&testutil.Event{}))
 	if err != nil {
 		t.Fatal("expected err to be nil, got", err)
@@ -36,7 +36,7 @@ func TestRegister(t *testing.T) {
 		t.Fatal("expected err be nil, got", err)
 	}
 
-	// only Event2 is registered in global register
+	// only Event2 is registered in global registry
 	globReg := NewRegister("")
 	globReg.
 		Set(&testutil.Event2{})
@@ -49,14 +49,14 @@ func TestRegister(t *testing.T) {
 		t.Fatal("expected err to be nil, got", err)
 	}
 
-	// the global registry, in contrast to reg with namespace, does not force it's namespace prefix in event name
+	// in contrast to reg with namespace, the global registry does not force its namespace prefix in event name
 	// thus, Event2 name in registry is {package name}.Event2 instead of {namespace}.Event2
 	if _, err = globReg.Get(TypeOfWithContext(ctx, &testutil.Event2{})); !errors.Is(err, ErrNotFoundInRegistry) {
 		t.Fatal("Expected err be nil, got", err)
 	}
 }
 
-func TestRegister_Convert(t *testing.T) {
+func TestRegister_GetFromGlobal(t *testing.T) {
 	type Event struct{ Val string }
 	type Event2 struct{ Val string }
 
@@ -66,8 +66,6 @@ func TestRegister_Convert(t *testing.T) {
 	NewRegister("").Clear()
 	defer NewRegister("").Clear()
 
-	// testutil.Event is the equivalent of Event.
-	// Event2 does not have an equivalent in the global registry
 	NewRegister(namespace).
 		Set(&Event{}).
 		Set(&Event2{})
@@ -75,40 +73,57 @@ func TestRegister_Convert(t *testing.T) {
 	NewRegister("").
 		Set(&testutil.Event{})
 
-	evt1 := Event{Val: "1"}
+	evt1 := Event{}
 
 	// case 1
-	cevt1, err := NewRegister(namespace).Convert(&evt1)
+	globalEvt1, err := NewRegister(namespace).GetFromGlobal(evt1)
 	if err != nil {
 		t.Fatalf("expect err be nil, got %v", err)
 	}
-	ccevt1, ok := cevt1.(testutil.Event)
+	_, ok := globalEvt1.(*testutil.Event)
 	if !ok {
-		t.Fatalf("expect the converted event type be %T, got false", testutil.Event{})
-	}
-	if want, val := evt1.Val, ccevt1.Val; want != val {
-		t.Fatalf("expecet %v, %v be equals", want, val)
+		t.Fatalf("expect global event type be %T, got %T", &testutil.Event{}, globalEvt1)
 	}
 
 	// case 2
-	cevt1, err = NewRegister(namespace).Convert(evt1)
+	globalEvt1, err = NewRegister(namespace).GetFromGlobal(evt1)
 	if err != nil {
 		t.Fatalf("expect err be nil, got %v", err)
 	}
-	ccevt1, ok = cevt1.(testutil.Event)
+	_, ok = globalEvt1.(*testutil.Event)
 	if !ok {
-		t.Fatalf("expect the converted event type be %T, got false", testutil.Event{})
-	}
-	if want, val := evt1.Val, ccevt1.Val; want != val {
-		t.Fatalf("expecet %v, %v be equals", want, val)
+		t.Fatalf("expect global event type be %T, got %T", testutil.Event{}, globalEvt1)
 	}
 
-	// case error
-	// try to convert an event that is not registered in the global registry
-	// must returns a not found error
-	evt2 := Event2{Val: "2"}
-	_, err = NewRegister(namespace).Convert(evt2)
+	evt2 := Event2{}
+	_, err = NewRegister(namespace).GetFromGlobal(evt2)
 	if wantErr := ErrNotFoundInRegistry; !errors.Is(err, wantErr) {
 		t.Fatalf("expect err be %v, got %v", wantErr, err)
+	}
+}
+
+func TestRegister_All(t *testing.T) {
+	type Event struct{ Val string }
+
+	namespace := "testutil"
+
+	NewRegister("").Clear()
+	defer NewRegister("").Clear()
+
+	evt1 := Event{Val: "1"}
+
+	NewRegister(namespace).
+		Set(&evt1, WithAliases("evt_1"), func(rep registryEntryProps) {
+			rep["custom"] = "custom"
+		})
+
+	for _, entry := range NewRegister(namespace).All() {
+		if want, got := "evt_1", entry.Property("aliases").([]string)[0]; want != got {
+			t.Fatalf("expect %v, %v be equals", want, got)
+		}
+		if want, got := "custom", entry.Property("custom").(string); want != got {
+			t.Fatalf("expect %v, %v be equals", want, got)
+		}
+		break
 	}
 }

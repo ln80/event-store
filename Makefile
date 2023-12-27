@@ -16,8 +16,8 @@ start-dynamodb/persist:
 	--name dynamodb amazon/dynamodb-local -jar DynamoDBLocal.jar \
 	-sharedDb -dbPath /home/dynamodblocal
 
-test/ci:
-	go test -race -cover ./...
+ci/test:
+	go test -race -cover ./... -coverprofile coverage.out -covermode atomic
 
 test/dynamodb: export DYNAMODB_ENDPOINT = http://localhost:$(DYNAMODB_PORT)
 test/dynamodb:
@@ -28,7 +28,7 @@ test/local: test/dynamodb
 
 .PHONY: examples
 examples:
-	gotest -race -v -cover ./examples/...
+	go test -race -v -cover ./examples/...
 
 
 include ./stack/elastic/Makefile

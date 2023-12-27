@@ -17,9 +17,8 @@ func TestTransformEvents(t *testing.T) {
 
 	stmID := NewStreamID(globalID, "service", "rootEntityID")
 
-	// test data combines pointers and struct value
 	events := []any{
-		&testutil.Event{
+		testutil.Event{
 			Val: "1",
 		},
 		testutil.Event{
@@ -33,50 +32,44 @@ func TestTransformEvents(t *testing.T) {
 
 	t.Run("partial failure assert atomicity", func(t *testing.T) {
 		wantErr := errors.New("transform fake test error")
-		if err := Transform(ctx, envs, func(ctx context.Context, copyPtrs ...any) error {
-			for i := range copyPtrs {
+		if err := Transform(ctx, envs, func(ctx context.Context, evts ...any) ([]any, error) {
+			result := make([]any, len(evts))
+			for i := range evts {
 				if i%2 == 1 {
-					return wantErr
+					return nil, wantErr
 				}
-				ptr, _ := copyPtrs[i].(*testutil.Event)
-				ptr.Val = "0"
+				evt := evts[i].(testutil.Event)
+				evt.Val = "0"
+				result[i] = evt
 			}
-			return nil
+			return evts, nil
 		}); !errors.Is(err, wantErr) {
 			t.Fatalf("expect %v, %v be equals", err, wantErr)
 		}
 		for i, env := range envs {
 			want, got := (testutil.Event{Val: strconv.Itoa(i + 1)}), env.Event()
-
-			if reflect.TypeOf(got).Kind() == reflect.Ptr {
-				if !reflect.DeepEqual(&want, got) {
-					t.Fatalf("expect %v, %v be equals", want, got)
-				}
-			} else {
-				if !reflect.DeepEqual(want, got) {
-					t.Fatalf("expect %v, %v be equals", want, got)
-				}
+			if !reflect.DeepEqual(want, got) {
+				t.Fatalf("expect %v, %v be equals", want, got)
 			}
 		}
 	})
 
 	t.Run("assert transform events successfully", func(t *testing.T) {
-		// for i, env := range envs {
-		// 	t.Logf("%d: %+v %p", i, env.Event(), env.Event())
-		// }
-		if err := Transform(ctx, envs, func(ctx context.Context, copyPtrs ...any) error {
-			for i := range copyPtrs {
-				ptr, _ := copyPtrs[i].(*testutil.Event)
-				ptr.Val = "0"
+		if err := Transform(ctx, envs, func(ctx context.Context, evts ...any) ([]any, error) {
+			result := make([]any, len(evts))
+			for i := 0; i < len(evts); i++ {
+				evt := evts[i].(testutil.Event)
+				evt.Val = "0"
+				result[i] = evt
 			}
-			return nil
+			return result, nil
 		}); err != nil {
 			t.Fatal("expect err be nil, got", err)
 		}
 
 		for _, env := range envs {
 			// t.Logf("%d: %+v %p", i, env.Event(), env.Event())
-			if want, got := "0", env.Event().(*testutil.Event).Val; want != got {
+			if want, got := "0", env.Event().(testutil.Event).Val; want != got {
 				t.Fatalf("expect %v, %v be equals", want, got)
 			}
 		}

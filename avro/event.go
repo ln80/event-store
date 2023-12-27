@@ -1,11 +1,15 @@
 package avro
 
 import (
-	"log"
 	"reflect"
 	"time"
 
 	"github.com/ln80/event-store/event"
+	"github.com/ln80/event-store/internal/logger"
+)
+
+var (
+	noEvent = struct{}{}
 )
 
 func convertEvent(evt event.Envelope) (to *avroEvent, err error) {
@@ -62,15 +66,28 @@ var _ event.Envelope = &avroEvent{}
 
 func (e *avroEvent) Event() any {
 	if e.fEvent != nil {
+		if e.fEvent == noEvent {
+			return nil
+		}
 		return e.fEvent
 	}
 
-	e.fEvent = e.FRawEvent
-	if e.fEvent == nil {
-		log.Println("[WARNING] Unmarshal event data has failed")
+	if e.FRawEvent != nil {
+		e.fEvent = e.FRawEvent
+		return e.fEvent
 	}
+	log := logger.Default().
+		WithName("avro").
+		WithValues(
+			"stmID", e.StreamID(),
+			"type", e.Type(),
+			"ver", e.Version(),
+		)
+	log.V(1).Info("Unexpected empty event data")
+	log.V(3).Info("Perhaps event type is no longer part of any registered Avro schemas", "embeddedSchemaID", e._schemaID)
 
-	return e.fEvent
+	e.fEvent = noEvent
+	return nil
 }
 
 func (e *avroEvent) StreamID() string {
@@ -143,30 +160,34 @@ func (e *avroEvent) Transform(fn func(any) any) {
 	}
 }
 
-func (e *avroEvent) SetSchemaID(id string) {
+func (e *avroEvent) SetAVROSchemaID(id string) {
 	e._schemaID = id
 }
 
-func (e *avroEvent) SchemaID() string {
+func (e *avroEvent) AVROSchemaID() string {
 	return e._schemaID
 }
 
-// checkType does change event type in the envelope based
-// on the current event data struct type.
+// checkType does change event type name in the envelope to match
+// the current event data struct type.
 func (e *avroEvent) checkType(namespace string) {
-	// checking global event registry might be error prone;
-	// make sure to require namespace; this logic might change.
+	// make sure to require namespace; this logic might change because
+	// using global event registry might be error-prone.
 	if namespace == "" {
 		return
 	}
 
 	// event data might be empty in the case of a removed event type
-	// that is not indicated as alias for another. In a such case just do skip.
+	// that is not indicated as alias for a new.
+	//
+	// In a such case just do skip type name upgrade.
 	data := e.Event()
 	if data == nil {
 		return
 	}
 
+	// In the case fo an empty event registry. Avro serializer use generic type i.e, a Map to represent data.
+	// In such as case, do skip event type name upgrade.
 	typ := reflect.TypeOf(data)
 	if typ.Kind() == reflect.Pointer {
 		typ = typ.Elem()
@@ -177,6 +198,12 @@ func (e *avroEvent) checkType(namespace string) {
 
 	t := event.TypeOfWithNamespace(namespace, data)
 	if t != e.FType {
+		logger.Default().WithName("avro").V(1).Info("Event type name has upgraded",
+			"stmID", e.StreamID(),
+			"old_type", e.FType,
+			"type", t,
+			"ver", e.Version())
+
 		e.FType = t
 	}
 }
