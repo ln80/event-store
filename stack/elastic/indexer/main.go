@@ -35,5 +35,7 @@ func init() {
 }
 
 func main() {
+
+	// logger.Default().Info("boom")
 	lambda.Start(makeHandler(indexer))
 }

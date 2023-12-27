@@ -15,7 +15,6 @@ import (
 )
 
 func TestNewEventStore(t *testing.T) {
-
 	tcs := []struct {
 		dbsvc AdminAPI
 		table string

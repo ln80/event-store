@@ -49,16 +49,14 @@ func GenEvents(count int) []any {
 	for i := 0; i < count; i++ {
 		var evt any
 		if i%2 == 0 {
-			evt = &Event2{
-				ID:  strconv.Itoa(i),
-				Val: "val " + strconv.Itoa(i),
-
-				LongText: generateRandomText(100),
-
+			evt = Event2{
+				ID:         strconv.Itoa(i),
+				Val:        "val " + strconv.Itoa(i),
+				LongText:   generateRandomText(100),
 				MediumText: generateRandomText(50),
 			}
 		} else {
-			evt = &Event1{"val " + strconv.Itoa(i)}
+			evt = Event1{"val " + strconv.Itoa(i)}
 		}
 
 		events[i] = evt

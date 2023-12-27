@@ -12,12 +12,44 @@ import (
 func TestEvent(t *testing.T) {
 	testutil.RegisterEvent("")
 
+	// defer event.NewRegister("")
+
 	ctx := context.Background()
 	// ctx = context.WithValue(ctx, event.ContextNamespaceKey, "")
 	stmID := event.NewStreamID("tenantID")
 
+	t.Run("simple", func(t *testing.T) {
+		jsonEvt := jsonEvent{}
+
+		if want, got := event.VersionZero, jsonEvt.Version(); want != got {
+			t.Fatalf("expect %s, %s  be equals", want, got)
+		}
+		if want, got := event.VersionZero, jsonEvt.GlobalVersion(); want != got {
+			t.Fatalf("expect %s, %s  be equals", want, got)
+		}
+		jsonEvt.SetGlobalVersion(event.VersionMax)
+		if want, got := event.VersionMax, jsonEvt.GlobalVersion(); want != got {
+			t.Fatalf("expect %s, %s  be equals", want, got)
+		}
+		if want, got := any(nil), jsonEvt.Event(); want != got {
+			t.Fatalf("expect %s, %s  be equals", want, got)
+		}
+		// check idempotency due to the existing of an internal cache
+		if want, got := any(nil), jsonEvt.Event(); want != got {
+			t.Fatalf("expect %s, %s  be equals", want, got)
+		}
+	})
+
 	t.Run("convert", func(t *testing.T) {
-		evt := event.Wrap(ctx, stmID, testutil.GenEvents(1))[0]
+		ver := event.VersionMin
+		gVer := event.VersionMin
+
+		evt := event.Wrap(ctx,
+			stmID, testutil.GenEvents(1),
+			// event.WithNameSpace("service1"),
+			event.WithVersionIncr(ver, 1, event.VersionSeqDiffPart),
+			event.WithGlobalVersionIncr(gVer, 1, event.VersionSeqDiffPart),
+		)[0]
 
 		jsonEvt, err := convertEvent(evt)
 		if err != nil {
@@ -28,7 +60,6 @@ func TestEvent(t *testing.T) {
 			t.Fatalf("expect event type be *jsonEvent, got %T", jsonEvt)
 		}
 
-		// TODO get rid of this... error-prone
 		jsonEvt.reg = event.NewRegister("")
 
 		_ = jsonEvt.Event()

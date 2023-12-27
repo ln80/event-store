@@ -14,7 +14,9 @@ import (
 
 var typeOfBytes = reflect.TypeOf([]byte(nil))
 
-// eventSchema returns the avro schema of the event defined in the avro package.
+// eventSchema returns the avro schema of the Avro event envelope.
+// The generated schema uses union to describe every domain event registered
+// under the given namespace in the event registry.
 func eventSchema(a avro.API, namespace string) (avro.Schema, error) {
 	schemas := make([]avro.Schema, 0)
 	for t, entry := range event.NewRegister(namespace).All() {
@@ -38,7 +40,8 @@ func eventSchema(a avro.API, namespace string) (avro.Schema, error) {
 			// 	return nil, err
 			// }
 
-			// json-based struct-to-map result is much more compatible with avro lib's parsed default values
+			// using mapstructure might be much performant but
+			// json-based struct-to-map result is much more compatible with "hamba/avro" parsed default values
 			b, err := json.Marshal(def)
 			if err != nil {
 				return nil, err

@@ -2,6 +2,7 @@ package event
 
 import (
 	"context"
+	"reflect"
 	"testing"
 	"time"
 
@@ -14,7 +15,7 @@ func TestEnvelope(t *testing.T) {
 	globalID := "tenantID"
 	stmID := NewStreamID(globalID, "service", "rootEntityID")
 
-	t.Run("test envelop event", func(t *testing.T) {
+	t.Run("basic", func(t *testing.T) {
 		events := []any{
 			&testutil.Event{
 				Val: "1",
@@ -61,7 +62,7 @@ func TestEnvelope(t *testing.T) {
 		}
 	})
 
-	t.Run("test envelop event with context values", func(t *testing.T) {
+	t.Run("with context values", func(t *testing.T) {
 		user := "Joyce Pfeffer IV"
 		ctx := context.WithValue(
 			context.WithValue(ctx, ContextUserKey, user),
@@ -92,7 +93,7 @@ func TestEnvelope(t *testing.T) {
 		}
 	})
 
-	t.Run("test envelop event with options", func(t *testing.T) {
+	t.Run("with options", func(t *testing.T) {
 		events := []any{
 			&testutil.Event{
 				Val: "1",
@@ -120,6 +121,13 @@ func TestEnvelope(t *testing.T) {
 				env.SetGlobalVersion(ver)
 				ver = ver.Incr()
 			},
+			func(env RWEnvelope) {
+				env.SetNamespace("foo")
+			},
+			func(env RWEnvelope) {
+				env.SetDests([]string{"dest_1"})
+			},
+			nil,
 		)
 		for i, env := range envs {
 			if want, val := user, env.User(); want != val {
@@ -132,21 +140,43 @@ func TestEnvelope(t *testing.T) {
 				t.Fatalf("expect %v, %v be equals", want, val)
 			}
 			if i%2 == 0 {
-				if want, val := TypeOf(testutil.Event{}), env.Type(); want != val {
+				if want, val := TypeOfWithNamespace("foo", testutil.Event{}), env.Type(); want != val {
 					t.Fatalf("expect %v, %v be equals", want, val)
 				}
 			} else {
-				if want, val := TypeOf(testutil.Event2{}), env.Type(); want != val {
+				if want, val := TypeOfWithNamespace("foo", testutil.Event2{}), env.Type(); want != val {
 					t.Fatalf("expect %v, %v be equals", want, val)
 				}
 			}
 			if want, val := tm0.Add(-5*time.Duration(i)*time.Second), env.At(); !val.Equal(want) {
 				t.Fatalf("expect %v, %v be equals", want, val)
 			}
+			if want, val := []string{"dest_1"}, env.Dests(); !reflect.DeepEqual(want, val) {
+				t.Fatalf("expect %v, %v be equals", want, val)
+			}
 		}
 	})
 
-	t.Run("test envelop event with version increment", func(t *testing.T) {
+	t.Run("with version increment", func(t *testing.T) {
+		t.Run("invalid", func(t *testing.T) {
+			defer func() {
+				if r := recover(); r == nil {
+					t.Fatal("expect to panic, got nil")
+				}
+			}()
+			events := []any{
+				&testutil.Event{
+					Val: "1",
+				},
+				&testutil.Event2{
+					Val: "2",
+				},
+			}
+			ver0 := NewVersion()
+			_ = Wrap(ctx, stmID, events,
+				WithVersionIncr(ver0, len(events), 10),
+			)
+		})
 
 		events := []any{
 			&testutil.Event{
@@ -157,7 +187,7 @@ func TestEnvelope(t *testing.T) {
 			},
 		}
 
-		// increment version integer part
+		// increment version's integer part
 		ver0 := NewVersion()
 		envs := Wrap(ctx, stmID, events,
 			WithVersionIncr(ver0, len(events), VersionSeqDiffPart),
@@ -181,6 +211,69 @@ func TestEnvelope(t *testing.T) {
 		l = len(envs)
 		for i, env := range envs {
 			want, val := ver1.Add(0, uint8(i)), env.Version()
+			if i == l-1 {
+				want = want.EOF()
+			}
+			if want != val {
+				t.Fatalf("expect %v, %v be equals", want, val)
+			}
+		}
+	})
+
+	t.Run("with global version increment", func(t *testing.T) {
+		t.Run("invalid", func(t *testing.T) {
+			defer func() {
+				if r := recover(); r == nil {
+					t.Fatal("expect to panic, got nil")
+				}
+			}()
+			events := []any{
+				&testutil.Event{
+					Val: "1",
+				},
+				&testutil.Event2{
+					Val: "2",
+				},
+			}
+			ver0 := NewVersion()
+			_ = Wrap(ctx, stmID, events,
+				WithGlobalVersionIncr(ver0, len(events), 10),
+			)
+		})
+
+		events := []any{
+			&testutil.Event{
+				Val: "1",
+			},
+			&testutil.Event2{
+				Val: "2",
+			},
+		}
+
+		// increment version integer part
+		ver0 := NewVersion()
+		envs := Wrap(ctx, stmID, events,
+			WithGlobalVersionIncr(ver0, len(events), VersionSeqDiffPart),
+		)
+		l := len(envs)
+		for i, env := range envs {
+			want, val := ver0.Add(uint64(i), 0), env.GlobalVersion()
+			if i == l-1 {
+				want = want.EOF()
+			}
+			if want != val {
+				t.Fatalf("expect %v, %v be equals", want, val)
+			}
+		}
+
+		// increment version's fractional part
+		ver1 := NewVersion()
+		envs = Wrap(ctx, stmID, events,
+			WithGlobalVersionIncr(ver0, len(events), VersionSeqDiffFracPart),
+		)
+		l = len(envs)
+		for i, env := range envs {
+			want, val := ver1.Add(0, uint8(i)), env.GlobalVersion()
 			if i == l-1 {
 				want = want.EOF()
 			}

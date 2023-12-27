@@ -12,7 +12,7 @@ import (
 	pii_memory "github.com/ln80/pii/memory"
 )
 
-func TestPIIProtectWrapper(t *testing.T) {
+func TestPIIProtectDecorator(t *testing.T) {
 	testutil.RegisterEvent("")
 
 	ctx := context.Background()

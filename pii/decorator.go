@@ -2,6 +2,7 @@ package pii
 
 import (
 	"context"
+	"reflect"
 	"time"
 
 	es "github.com/ln80/event-store"
@@ -26,11 +27,32 @@ type Decorator struct {
 
 var _ es.EventStore = &Decorator{}
 
+func makePtr(value any) any {
+	typ := reflect.TypeOf(value)
+	if typ.Kind() == reflect.Ptr {
+		return value
+	}
+	ptr := reflect.New(typ)
+	ptr.Elem().Set(reflect.ValueOf(value))
+	return ptr.Interface()
+}
+
 // Append implements EventStore
 func (s *Decorator) Append(ctx context.Context, id event.StreamID, events []event.Envelope, optFns ...func(*event.AppendOptions)) error {
 	p, _ := s.encryptor.Instance(id.GlobalID())
-	fn := func(ctx context.Context, ptrs ...any) error {
-		return p.Encrypt(ctx, ptrs...)
+
+	fn := func(ctx context.Context, evts ...any) ([]any, error) {
+		result := make([]any, len(evts))
+		for i, evt := range evts {
+			evt := evt
+			if err := p.Encrypt(ctx, makePtr(evt)); err != nil {
+				return nil, err
+			}
+
+			result[i] = evt
+		}
+
+		return result, nil
 	}
 
 	if err := event.Transform(ctx, events, fn); err != nil {
@@ -43,8 +65,20 @@ func (s *Decorator) Append(ctx context.Context, id event.StreamID, events []even
 // Load implements EventStore
 func (s *Decorator) Load(ctx context.Context, id event.StreamID, trange ...time.Time) ([]event.Envelope, error) {
 	p, _ := s.encryptor.Instance(id.GlobalID())
-	fn := func(ctx context.Context, ptrs ...any) error {
-		return p.Decrypt(ctx, ptrs...)
+	// fn := func(ctx context.Context, ptrs ...any) error {
+	// 	return p.Decrypt(ctx, ptrs...)
+	// }
+
+	fn := func(ctx context.Context, evts ...any) ([]any, error) {
+		result := make([]any, len(evts))
+		for i, evt := range evts {
+			evt := evt
+			if err := p.Decrypt(ctx, makePtr(evt)); err != nil {
+				return nil, err
+			}
+			result[i] = evt
+		}
+		return result, nil
 	}
 
 	events, err := s.store.Load(ctx, id, trange...)
@@ -61,8 +95,20 @@ func (s *Decorator) Load(ctx context.Context, id event.StreamID, trange ...time.
 // Replay implements EventStore
 func (s *Decorator) Replay(ctx context.Context, stmID event.StreamID, f event.StreamerQuery, h event.StreamerHandler) error {
 	p, _ := s.encryptor.Instance(stmID.GlobalID())
-	fn := func(ctx context.Context, ptrs ...any) error {
-		return p.Decrypt(ctx, ptrs...)
+	// fn := func(ctx context.Context, ptrs ...any) error {
+	// 	return p.Decrypt(ctx, ptrs...)
+	// }
+
+	fn := func(ctx context.Context, evts ...any) ([]any, error) {
+		result := make([]any, len(evts))
+		for i, evt := range evts {
+			evt := evt
+			if err := p.Decrypt(ctx, makePtr(evt)); err != nil {
+				return nil, err
+			}
+			result[i] = evt
+		}
+		return result, nil
 	}
 
 	ph := func(ctx context.Context, data event.StreamData) error {
@@ -83,8 +129,21 @@ func (s *Decorator) Replay(ctx context.Context, stmID event.StreamID, f event.St
 // AppendToStream implements EventStore
 func (s *Decorator) AppendToStream(ctx context.Context, chunk sourcing.Stream, optFns ...func(*event.AppendOptions)) error {
 	p, _ := s.encryptor.Instance(chunk.ID().GlobalID())
-	fn := func(ctx context.Context, ptrs ...any) error {
-		return p.Encrypt(ctx, ptrs...)
+	// fn := func(ctx context.Context, ptrs ...any) error {
+	// 	return p.Encrypt(ctx, ptrs...)
+	// }
+	fn := func(ctx context.Context, evts ...any) ([]any, error) {
+		result := make([]any, len(evts))
+		for i, evt := range evts {
+			evt := evt
+			if err := p.Encrypt(ctx, makePtr(evt)); err != nil {
+				return nil, err
+			}
+
+			result[i] = evt
+		}
+
+		return result, nil
 	}
 
 	if err := event.Transform(ctx, chunk.Unwrap(), fn); err != nil {
@@ -97,8 +156,19 @@ func (s *Decorator) AppendToStream(ctx context.Context, chunk sourcing.Stream, o
 // LoadStream implements EventStore
 func (s *Decorator) LoadStream(ctx context.Context, id event.StreamID, vrange ...event.Version) (*sourcing.Stream, error) {
 	p, _ := s.encryptor.Instance(id.GlobalID())
-	fn := func(ctx context.Context, ptrs ...any) error {
-		return p.Decrypt(ctx, ptrs...)
+	// fn := func(ctx context.Context, ptrs ...any) error {
+	// 	return p.Decrypt(ctx, ptrs...)
+	// }
+	fn := func(ctx context.Context, evts ...any) ([]any, error) {
+		result := make([]any, len(evts))
+		for i, evt := range evts {
+			evt := evt
+			if err := p.Decrypt(ctx, makePtr(evt)); err != nil {
+				return nil, err
+			}
+			result[i] = evt
+		}
+		return result, nil
 	}
 
 	stm, err := s.store.LoadStream(ctx, id, vrange...)

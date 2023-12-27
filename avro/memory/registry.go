@@ -41,7 +41,9 @@ func (r *Registry) Setup(ctx context.Context, schema avro.Schema, opts ...func(*
 	if r.current.schema != nil && r.current.schemaID != "" {
 		return nil
 	}
-
+	if schema == nil {
+		return nil
+	}
 	r.current.schema = schema.(*avro.RecordSchema)
 	fingerprint := schema.Fingerprint()
 	r.current.schemaID = string(fingerprint[:])
@@ -51,12 +53,15 @@ func (r *Registry) Setup(ctx context.Context, schema avro.Schema, opts ...func(*
 }
 
 // Client implements avro.Registry.
-func (r *Registry) Client() avro.API {
+func (r *Registry) API() avro.API {
 	return r.api
 }
 
 // Marshal implements avro.Registry.
 func (r *Registry) Marshal(ctx context.Context, v any) ([]byte, error) {
+	if r.current.schema == nil {
+		return nil, registry.ErrUnableToResolveSchema
+	}
 	b, err := r.api.Marshal(r.current.schema, v)
 	if err != nil {
 		return nil, err
@@ -71,6 +76,10 @@ func (r *Registry) Marshal(ctx context.Context, v any) ([]byte, error) {
 
 // MarshalBatch implements avro.Registry.
 func (r *Registry) MarshalBatch(ctx context.Context, v any) ([]byte, error) {
+	if r.current.batchSchema == nil {
+		return nil, registry.ErrUnableToResolveSchema
+	}
+
 	b, err := r.api.Marshal(r.current.batchSchema, v)
 	if err != nil {
 		return nil, err
@@ -121,24 +130,6 @@ func (r *Registry) UnmarshalBatch(ctx context.Context, b []byte, v any) error {
 	return nil
 }
 
-func (r *Registry) Add(ctx context.Context, schema avro.Schema) error {
-	schema, err := r.compatibility.Resolve(r.current.schema, schema)
-	if err != nil {
-		return err
-	}
-
-	fingerprint := schema.Fingerprint()
-	id := string(fingerprint[:])
-
-	r.cache[id] = schemaEntry{
-		schema:      schema.(*avro.RecordSchema),
-		batchSchema: avro.NewArraySchema(schema),
-		schemaID:    id,
-	}
-
-	return nil
-}
-
 func (r *Registry) getSchema(ctx context.Context, id string) (string, *avro.RecordSchema, *avro.ArraySchema, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -149,7 +140,7 @@ func (r *Registry) getSchema(ctx context.Context, id string) (string, *avro.Reco
 
 	entry, ok := r.cache[id]
 	if !ok {
-		return "", nil, nil, fmt.Errorf("schema not found id: %v", id)
+		return "", nil, nil, fmt.Errorf("%w: %v", registry.ErrUnableToResolveSchema, id)
 	}
 
 	return id, entry.schema, entry.batchSchema, nil
@@ -166,5 +157,3 @@ func (r *Registry) extractSchemaID(data []byte) (string, []byte, error) {
 
 	return string(data[0:32]), data[32:], nil
 }
-
-// var _ avro.Registry = &Registry{}
