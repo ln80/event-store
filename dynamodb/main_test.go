@@ -14,7 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/ln80/event-store/event"
-	"github.com/ln80/event-store/testutil"
+	"github.com/ln80/event-store/internal/testutil"
 )
 
 var dbsvc AdminAPI
@@ -73,10 +73,10 @@ func withTable(t *testing.T, dbsvc AdminAPI, tfn func(table string)) {
 
 func TestMain(m *testing.M) {
 	endpoint := os.Getenv("DYNAMODB_ENDPOINT")
-	if endpoint == "" {
-		log.Println("dynamodb test endpoint not found")
-		return
-	}
+	// if endpoint == "" {
+	// 	log.Println("dynamodb test endpoint not found")
+	// 	return
+	// }
 
 	cfg, err := awsConfig(endpoint)
 	if err != nil {

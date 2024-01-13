@@ -2,6 +2,8 @@ package dynamodb
 
 import (
 	"context"
+	"fmt"
+
 	"errors"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
@@ -9,51 +11,45 @@ import (
 )
 
 var (
-	ErrTxAlreadyStarted = errors.New("transaction already started")
+	ErrTxAlreadyStarted  = errors.New("transaction already started")
+	ErrTxInvalidItemType = errors.New("invalid transaction item type")
 )
 
 type ContextKey string
 
 var sessionContextKey ContextKey = "dynamodbSessionKey"
 
-type Session interface {
-	CommitTx(ctx context.Context) error
-	StartTx() error
-	CloseTx() error
-	HasTx() bool
-
-	Put(ctx context.Context, p *dynamodb.PutItemInput) error
-	Update(ctx context.Context, u *dynamodb.UpdateItemInput) error
-	Check(ctx context.Context, c *types.ConditionCheck) error
-	Delete(ctx context.Context, d *dynamodb.DeleteItemInput) error
-}
-
-func NewSession(db ClientAPI) Session {
-	return &session{
-		svc: db,
+func NewSession(api ClientAPI) *Session {
+	return &Session{
+		api: api,
+		cc:  &ConsumedCapacity{},
 	}
 }
 
-func SessionFrom(ctx context.Context) (Session, bool) {
-	ses, ok := ctx.Value(sessionContextKey).(Session)
+func SessionFrom(ctx context.Context) (*Session, bool) {
+	ses, ok := ctx.Value(sessionContextKey).(*Session)
 	if ok {
 		return ses, true
 	}
 	return nil, false
 }
 
-func ContextWithSession(ctx context.Context, s Session) context.Context {
+func ContextWithSession(ctx context.Context, s *Session) context.Context {
 	return context.WithValue(ctx, sessionContextKey, s)
 }
 
-type session struct {
-	svc ClientAPI
+type Session struct {
+	api ClientAPI
 	ops []txOp
+	cc  *ConsumedCapacity
 }
 
-var _ Session = &session{}
+// ConsumedCapacity implements Session.
+func (s *Session) ConsumedCapacity() *ConsumedCapacity {
+	return s.cc
+}
 
-func (s *session) StartTx() error {
+func (s *Session) StartTx() error {
 	if s.ops == nil {
 		s.ops = []txOp{}
 		return nil
@@ -61,16 +57,50 @@ func (s *session) StartTx() error {
 	return ErrTxAlreadyStarted
 }
 
-func (s *session) HasTx() bool {
+func (s *Session) HasTx() bool {
 	return s.ops != nil
 }
 
-func (s *session) CloseTx() error {
+func (s *Session) CloseTx() error {
 	s.ops = nil
 	return nil
 }
 
-func (s *session) CommitTx(ctx context.Context) (err error) {
+func (s *Session) addConsumedCapacity(out any) {
+	if s.cc == nil {
+		return
+	}
+
+	if o, ok := out.(*dynamodb.TransactWriteItemsOutput); ok && o != nil {
+		for _, cc := range o.ConsumedCapacity {
+			addConsumedCapacity(s.cc, &cc)
+		}
+		return
+	}
+	var occ *types.ConsumedCapacity
+	switch o := out.(type) {
+	case *dynamodb.PutItemOutput:
+		if o == nil {
+			return
+		}
+		occ = o.ConsumedCapacity
+	case *dynamodb.UpdateItemOutput:
+		if o == nil {
+			return
+		}
+		occ = o.ConsumedCapacity
+	case *dynamodb.DeleteItemOutput:
+		if o == nil {
+			return
+		}
+		occ = o.ConsumedCapacity
+	default:
+		return
+	}
+	addConsumedCapacity(s.cc, occ)
+}
+
+func (s *Session) CommitTx(ctx context.Context) (err error) {
 	defer func() {
 		if err == nil {
 			err = s.CloseTx()
@@ -84,18 +114,23 @@ func (s *session) CommitTx(ctx context.Context) (err error) {
 
 	if count == 1 {
 		op := s.ops[0]
-		if op.put != nil {
-			_, err = s.svc.PutItem(ctx, op.put)
+		flush := func(op txOp) (err error) {
+			var out any
+			defer s.addConsumedCapacity(out)
+			if op.put != nil {
+				out, err = s.api.PutItem(ctx, op.put)
+				return
+			}
+			if op.update != nil {
+				out, err = s.api.UpdateItem(ctx, op.update)
+				return
+			}
+			if op.delete != nil {
+				return
+			}
 			return
 		}
-		if op.update != nil {
-			_, err = s.svc.UpdateItem(ctx, op.update)
-			return
-		}
-		if op.delete != nil {
-			_, err = s.svc.DeleteItem(ctx, op.delete)
-			return
-		}
+		err = flush(op)
 		return
 	}
 
@@ -108,59 +143,91 @@ func (s *session) CommitTx(ctx context.Context) (err error) {
 			ConditionCheck: op.checkTx(),
 		}
 	}
-	if _, err = s.svc.TransactWriteItems(ctx, &dynamodb.TransactWriteItemsInput{
-		TransactItems: txItems,
-	}); err != nil {
-		return err
-	}
+
+	var out any
+	out, err = s.api.TransactWriteItems(ctx, &dynamodb.TransactWriteItemsInput{
+		TransactItems:          txItems,
+		ReturnConsumedCapacity: types.ReturnConsumedCapacityIndexes,
+	})
+	s.addConsumedCapacity(out)
+
 	return
 }
 
-func (s *session) Put(ctx context.Context, p *dynamodb.PutItemInput) error {
+func (s *Session) Put(ctx context.Context, p *dynamodb.PutItemInput) error {
 	if s.HasTx() {
 		s.ops = append(s.ops, txOp{
 			put: p,
 		})
 		return nil
 	}
-	if _, err := s.svc.PutItem(ctx, p); err != nil {
+	out, err := s.api.PutItem(ctx, p)
+	s.addConsumedCapacity(out)
+	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
-func (s *session) Update(ctx context.Context, u *dynamodb.UpdateItemInput) error {
+func (s *Session) Update(ctx context.Context, u *dynamodb.UpdateItemInput) error {
 	if s.HasTx() {
 		s.ops = append(s.ops, txOp{
 			update: u,
 		})
 		return nil
 	}
-	if _, err := s.svc.UpdateItem(ctx, u); err != nil {
+	out, err := s.api.UpdateItem(ctx, u)
+	s.addConsumedCapacity(out)
+	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (s *session) Delete(ctx context.Context, d *dynamodb.DeleteItemInput) error {
+func (s *Session) Delete(ctx context.Context, d *dynamodb.DeleteItemInput) error {
 	if s.HasTx() {
 		s.ops = append(s.ops, txOp{
 			delete: d,
 		})
 		return nil
 	}
-	if _, err := s.svc.DeleteItem(ctx, d); err != nil {
+	out, err := s.api.DeleteItem(ctx, d)
+	s.addConsumedCapacity(out)
+	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (s *session) Check(ctx context.Context, c *types.ConditionCheck) error {
+func (s *Session) Check(ctx context.Context, c *types.ConditionCheck) error {
 	if s.HasTx() {
 		s.ops = append(s.ops, txOp{
 			check: c,
 		})
 		return nil
+	}
+	return nil
+}
+
+func (s *Session) AddToTx(ctx context.Context, ops []any) error {
+	for _, item := range ops {
+		var err error
+		switch txi := item.(type) {
+		case *dynamodb.PutItemInput:
+			err = s.Put(ctx, txi)
+		case *dynamodb.DeleteItemInput:
+			err = s.Delete(ctx, txi)
+		case *dynamodb.UpdateItemInput:
+			err = s.Update(ctx, txi)
+		case *types.ConditionCheck:
+			err = s.Check(ctx, txi)
+		default:
+			panic(fmt.Errorf("%w: %T", ErrTxInvalidItemType, txi))
+		}
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -177,11 +244,12 @@ func (op *txOp) putTx() *types.Put {
 		return nil
 	}
 	return &types.Put{
-		Item:                      op.put.Item,
-		TableName:                 op.put.TableName,
-		ConditionExpression:       op.put.ConditionExpression,
-		ExpressionAttributeNames:  op.put.ExpressionAttributeNames,
-		ExpressionAttributeValues: op.put.ExpressionAttributeValues,
+		Item:                                op.put.Item,
+		TableName:                           op.put.TableName,
+		ConditionExpression:                 op.put.ConditionExpression,
+		ExpressionAttributeNames:            op.put.ExpressionAttributeNames,
+		ExpressionAttributeValues:           op.put.ExpressionAttributeValues,
+		ReturnValuesOnConditionCheckFailure: op.put.ReturnValuesOnConditionCheckFailure,
 	}
 }
 
@@ -190,12 +258,13 @@ func (op *txOp) updateTx() *types.Update {
 		return nil
 	}
 	return &types.Update{
-		Key:                       op.update.Key,
-		UpdateExpression:          op.update.UpdateExpression,
-		TableName:                 op.update.TableName,
-		ConditionExpression:       op.update.ConditionExpression,
-		ExpressionAttributeNames:  op.update.ExpressionAttributeNames,
-		ExpressionAttributeValues: op.update.ExpressionAttributeValues,
+		Key:                                 op.update.Key,
+		UpdateExpression:                    op.update.UpdateExpression,
+		TableName:                           op.update.TableName,
+		ConditionExpression:                 op.update.ConditionExpression,
+		ExpressionAttributeNames:            op.update.ExpressionAttributeNames,
+		ExpressionAttributeValues:           op.update.ExpressionAttributeValues,
+		ReturnValuesOnConditionCheckFailure: op.update.ReturnValuesOnConditionCheckFailure,
 	}
 }
 
@@ -204,11 +273,12 @@ func (op *txOp) deleteTx() *types.Delete {
 		return nil
 	}
 	return &types.Delete{
-		Key:                       op.delete.Key,
-		TableName:                 op.delete.TableName,
-		ConditionExpression:       op.delete.ConditionExpression,
-		ExpressionAttributeNames:  op.delete.ExpressionAttributeNames,
-		ExpressionAttributeValues: op.delete.ExpressionAttributeValues,
+		Key:                                 op.delete.Key,
+		TableName:                           op.delete.TableName,
+		ConditionExpression:                 op.delete.ConditionExpression,
+		ExpressionAttributeNames:            op.delete.ExpressionAttributeNames,
+		ExpressionAttributeValues:           op.delete.ExpressionAttributeValues,
+		ReturnValuesOnConditionCheckFailure: op.delete.ReturnValuesOnConditionCheckFailure,
 	}
 }
 

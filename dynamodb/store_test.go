@@ -2,6 +2,7 @@ package dynamodb
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"strings"
 	"testing"
@@ -10,8 +11,12 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/expression"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/ln80/event-store/event"
-	"github.com/ln80/event-store/testutil"
+	event_errors "github.com/ln80/event-store/event/errors"
+	"github.com/ln80/event-store/event/sourcing"
+	"github.com/ln80/event-store/internal/logger"
+	"github.com/ln80/event-store/internal/testutil"
 )
 
 func TestNewEventStore(t *testing.T) {
@@ -40,27 +45,98 @@ func TestNewEventStore(t *testing.T) {
 	for i, tc := range tcs {
 		t.Run("tc:"+strconv.Itoa(i), func(t *testing.T) {
 			defer func() {
+				r := recover()
 				if tc.ok {
-					if r := recover(); r != nil {
+					if r != nil {
 						t.Fatal("expect to not panic, got", r)
 					}
 				} else {
-					if r := recover(); r == nil {
+					if r == nil {
 						t.Fatal("expect to panic")
 					}
 				}
-
 			}()
 
 			NewEventStore(tc.dbsvc, tc.table, nil, nil)
 		})
 	}
 }
+
+func TestEventStore_WithTx(t *testing.T) {
+	ctx := context.Background()
+
+	addItem := func(table, hashKey, rangeKey string) any {
+		other := Item{
+			HashKey:  hashKey,
+			RangeKey: rangeKey,
+		}
+		r, _ := attributevalue.MarshalMap(other)
+		expr, _ := expression.
+			NewBuilder().
+			WithCondition(
+				expression.AttributeNotExists(
+					expression.Name(RangeKey),
+				),
+			).Build()
+		input := &dynamodb.PutItemInput{
+			TableName:                 aws.String(table),
+			Item:                      r,
+			ConditionExpression:       expr.Condition(),
+			ExpressionAttributeNames:  expr.Names(),
+			ExpressionAttributeValues: expr.Values(),
+
+			ReturnConsumedCapacity:              types.ReturnConsumedCapacityIndexes,
+			ReturnItemCollectionMetrics:         types.ReturnItemCollectionMetricsSize,
+			ReturnValuesOnConditionCheckFailure: types.ReturnValuesOnConditionCheckFailureAllOld,
+		}
+		return input
+	}
+
+	_ = addItem
+
+	logger.Default().Info(" far boo")
+	withTable(t, dbsvc, func(table string) {
+		store := NewEventStore(dbsvc, table)
+
+		t.Run("conflict", func(t *testing.T) {
+			streamID := event.NewStreamID(event.UID().String())
+			stm := sourcing.Wrap(ctx, streamID, event.VersionZero, testutil.GenEvents(5))
+			err := store.AppendToStream(ctx, stm, func(opt *event.AppendConfig) {
+				opt.AddToTx = func(ctx context.Context) (items []any) {
+					return []any{addItem(table, recordHashKey(streamID), recordRangeKeyWithVersion(streamID, event.VersionZero.Incr()))}
+				}
+			})
+			if want, got := event.ErrAppendEventsConflict, err; !errors.Is(got, want) {
+				t.Fatalf("expect %v,%v be equals", want, got)
+			}
+			if ok, target := event_errors.ErrAs[*types.TransactionCanceledException](err); !ok {
+				t.Fatalf("expect %v as %T", err, target)
+			}
+		})
+		t.Run("success", func(t *testing.T) {
+			streamID := event.NewStreamID(event.UID().String())
+			stm := sourcing.Wrap(ctx, streamID, event.VersionZero, testutil.GenEvents(5))
+			if err := store.AppendToStream(ctx, stm, func(opt *event.AppendConfig) {
+				items := []any{
+					addItem(table,
+						recordHashKey(streamID),
+						recordRangeKeyWithVersion(streamID, event.VersionZero.Add(10, 0)),
+					),
+				}
+				opt.AddToTx = func(ctx context.Context) []any {
+					return items
+				}
+			}); err != nil {
+				t.Fatalf("expect to append events, got err: %v", err)
+			}
+		})
+	})
+
+}
 func TestEventStore(t *testing.T) {
 	ctx := context.Background()
 
 	withTable(t, dbsvc, func(table string) {
-
 		testutil.TestEventLoggingStore(t, ctx, NewEventStore(dbsvc, table))
 
 		testutil.TestEventSourcingStore(t, ctx, NewEventStore(dbsvc, table))
@@ -68,11 +144,9 @@ func TestEventStore(t *testing.T) {
 		indexer := NewIndexer(dbsvc, table)
 
 		testutil.TestEventStreamer(t, ctx, NewEventStore(dbsvc, table), func(opt *testutil.TestEventStreamerOptions) {
-
-			// turn on this option so we can test replay event in DESC order / get recent
 			opt.SupportOrderDESC = true
 
-			// Do force the last persisted record indexing (aka set global version)
+			// Do force the indexing of the last persisted record
 			opt.PostAppend = func(id event.StreamID) {
 				expr, _ := expression.
 					NewBuilder().
@@ -80,7 +154,7 @@ func TestEventStore(t *testing.T) {
 						expression.Key(HashKey).
 							Equal(expression.Value(recordHashKey(event.NewStreamID(id.GlobalID())))).And(
 							expression.Key(RangeKey).
-								BeginsWith(strings.Join(id.Parts(), event.StreamIDPartsDelimiter) + "t_")),
+								BeginsWith(strings.Join(id.Parts(), event.StreamIDPartsDelimiter) + "@t_")),
 					).
 					Build()
 				out, err := dbsvc.Query(ctx, &dynamodb.QueryInput{
@@ -106,6 +180,5 @@ func TestEventStore(t *testing.T) {
 				}
 			}
 		})
-
 	})
 }
