@@ -7,7 +7,7 @@ import (
 )
 
 type Store interface {
-	AppendToStream(ctx context.Context, chunk Stream, optFns ...func(opt *event.AppendOptions)) error
+	AppendToStream(ctx context.Context, chunk Stream, optFns ...func(opt *event.AppendConfig)) error
 	LoadStream(ctx context.Context, id event.StreamID, vrange ...event.Version) (*Stream, error)
 }
 

@@ -2,7 +2,8 @@ package event
 
 import (
 	"context"
-	"errors"
+
+	"github.com/ln80/event-store/event/errors"
 )
 
 var (

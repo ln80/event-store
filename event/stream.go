@@ -1,11 +1,12 @@
 package event
 
 import (
-	"errors"
 	"fmt"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/ln80/event-store/event/errors"
 )
 
 const (
@@ -184,7 +185,7 @@ func ValidateEvent(env Envelope, cur *Cursor, opts ...func(v *Validation)) (igno
 	// Make sure the defined cursor stream ID is the same in every event envelope
 	streamID := resolveStreamID(env, v.GlobalStream)
 	if cur.StreamID != streamID {
-		return false, Err(ErrInvalidStream, cur.StreamID, "event streamID: "+streamID)
+		return false, errors.Err(ErrInvalidStream, cur.StreamID, "event streamID: "+streamID)
 	}
 
 	// Check event sequence based on the current cursor state
@@ -193,7 +194,7 @@ func ValidateEvent(env Envelope, cur *Cursor, opts ...func(v *Validation)) (igno
 
 		// stream version can't be zero
 		if ver.IsZero() {
-			return false, Err(ErrInvalidStream, cur.StreamID, "invalid evt version: "+ver.String())
+			return false, errors.Err(ErrInvalidStream, cur.StreamID, "invalid evt version: "+ver.String())
 		}
 		// return "to ignore" flag if event if out of range
 		if ver.Before(v.Boundaries.From) || ver.After(v.Boundaries.To) {
@@ -206,7 +207,7 @@ func ValidateEvent(env Envelope, cur *Cursor, opts ...func(v *Validation)) (igno
 			cur.Ver = ver
 		} else {
 			if !ver.Next(cur.Ver) {
-				return false, Err(ErrInvalidStream, cur.StreamID, "invalid version sequence: "+cur.Ver.String()+","+ver.String())
+				return false, errors.Err(ErrInvalidStream, cur.StreamID, "invalid version sequence: "+cur.Ver.String()+","+ver.String())
 			}
 			cur.Ver = ver
 		}
@@ -216,7 +217,7 @@ func ValidateEvent(env Envelope, cur *Cursor, opts ...func(v *Validation)) (igno
 	if !v.SkipTimeStamp {
 		at := env.At()
 		if at.IsZero() || at.Equal(time.Unix(0, 0)) {
-			return false, Err(ErrInvalidStream, cur.StreamID, "invalid evt timestamp: "+at.String())
+			return false, errors.Err(ErrInvalidStream, cur.StreamID, "invalid evt timestamp: "+at.String())
 		}
 		// return "to ignore" flag if event if out of range
 		if at.Before(v.Boundaries.Since) || at.After(v.Boundaries.Until) {
@@ -226,7 +227,7 @@ func ValidateEvent(env Envelope, cur *Cursor, opts ...func(v *Validation)) (igno
 			cur.At = at
 		} else {
 			if at.Before(cur.At) {
-				return false, Err(ErrInvalidStream, cur.StreamID, "invalid timestamp sequence: "+cur.At.String()+","+at.String())
+				return false, errors.Err(ErrInvalidStream, cur.StreamID, "invalid timestamp sequence: "+cur.At.String()+","+at.String())
 			}
 			cur.At = at
 		}

@@ -2,8 +2,9 @@ package event
 
 import (
 	"context"
-	"errors"
 	"time"
+
+	"github.com/ln80/event-store/event/errors"
 )
 
 // Envelope wraps and adds meta-data to events such us timestamp, stream ID, version
@@ -21,22 +22,50 @@ type Envelope interface {
 	TTL() time.Duration
 }
 
-// type ExpiredEnvelope interface {
-// 	TTL() time.Duration
-// }
-
+// RWEnvelope defines an envelope with some properties setter methods.
 type RWEnvelope interface {
 	Envelope
-
 	SetAt(t time.Time) Envelope
 	SetUser(userID string) Envelope
 	SetVersion(v Version) Envelope
-	SetGlobalVersion(v Version) Envelope
 	SetDests(dests []string) Envelope
 	SetTTL(ttl time.Duration) Envelope
+}
+
+// GlobalVersionSetter defines an envelope with a global version setter.
+type GlobalVersionSetter interface {
+	Envelope
+	SetGlobalVersion(v Version) Envelope
+}
+
+// NamespaceSetter defines an envelope with a namespace setter.
+type NamespaceSetter interface {
+	Envelope
 	SetNamespace(namespace string) Envelope
 }
 
+// MustGlobalVersionSetter asserts that the given envelope implements GlobalVersionSetter interface.
+func MustGlobalVersionSetter(env Envelope) GlobalVersionSetter {
+	rev, ok := env.(GlobalVersionSetter)
+	if !ok {
+		panic("event envelope does not implement 'GlobalVersionSetter'")
+	}
+
+	return rev
+}
+
+// MustNamespaceSetter asserts that the given envelope implements NamespaceSetter interface.
+func MustNamespaceSetter(env Envelope) NamespaceSetter {
+	rev, ok := env.(NamespaceSetter)
+	if !ok {
+		panic("event envelope does not implement 'NamespaceSetter'")
+	}
+
+	return rev
+}
+
+// EnvelopeOption defines a functional option that allows
+// to override some envelope properties.
 type EnvelopeOption func(env RWEnvelope)
 
 func WithVersionIncr(startingVer Version, limit int, diff VersionSequenceDiff) EnvelopeOption {
@@ -44,7 +73,7 @@ func WithVersionIncr(startingVer Version, limit int, diff VersionSequenceDiff) E
 	count := 0
 	return func(env RWEnvelope) {
 		// If current event is the last one in the given record
-		// then mark the fractional part of its version as EOF.
+		// then mark its fractional part as EOF.
 		// Otherwise, increment the version for the next event.
 		if count == limit-1 {
 			ver = ver.EOF()
@@ -66,9 +95,10 @@ func WithVersionIncr(startingVer Version, limit int, diff VersionSequenceDiff) E
 	}
 }
 
-func WithNameSpace(nspace string) EnvelopeOption {
+func WithNameSpace(namespace string) EnvelopeOption {
 	return func(env RWEnvelope) {
-		env.SetNamespace(nspace)
+		e := MustNamespaceSetter(env)
+		e.SetNamespace(namespace)
 	}
 }
 
@@ -76,15 +106,16 @@ func WithGlobalVersionIncr(startingVer Version, limit int, diff VersionSequenceD
 	ver := startingVer
 	count := 0
 	return func(env RWEnvelope) {
+		e := MustGlobalVersionSetter(env)
 		// If current event is the last one in the given record
 		// then mark the fractional part of its version as EOF.
 		// Otherwise, accordingly increment the version for the next event
 		if count == limit-1 {
 			ver = ver.EOF()
-			env.SetGlobalVersion(ver)
+			e.SetGlobalVersion(ver)
 			return
 		}
-		env.SetGlobalVersion(ver)
+		e.SetGlobalVersion(ver)
 
 		count++
 		switch diff {
@@ -141,6 +172,8 @@ func Wrap(ctx context.Context, stmID StreamID, events []any, opts ...EnvelopeOpt
 	return envs
 }
 
+// envelope presents the internal Envelope implementation it usually has
+// more capabilities comparing to the encoding format related ones.
 type envelope struct {
 	streamID       string
 	eID            string
@@ -148,9 +181,9 @@ type envelope struct {
 	event          any
 	at             time.Time
 	version        Version
-	user           string
 	globalStreamID string
 	globalVersion  Version
+	user           string
 	dests          []string
 	ttl            time.Duration
 	namespace      string
@@ -158,6 +191,7 @@ type envelope struct {
 
 var _ Envelope = &envelope{}
 var _ RWEnvelope = &envelope{}
+var _ GlobalVersionSetter = &envelope{}
 
 // ID implements the EventID method of the Envelope interface
 func (e *envelope) ID() string {
@@ -199,17 +233,17 @@ func (e *envelope) GlobalStreamID() string {
 	return e.globalStreamID
 }
 
-// GlobalVersion implements the GlobalVersion method of the Envelop interface
+// GlobalVersion implements the GlobalVersion method of the Envelope interface
 func (e *envelope) GlobalVersion() Version {
 	return e.globalVersion
 }
 
-// Dests implements the Dests method of the Envelop interface
+// Dests implements the Dests method of the Envelope interface
 func (e *envelope) Dests() []string {
 	return e.dests
 }
 
-// Dests implements the TTL method of the ExpiredEnvelope interface
+// TTL implements the TTL method of the Envelope interface
 func (e *envelope) TTL() time.Duration {
 	return e.ttl
 }
@@ -250,7 +284,7 @@ func (e *envelope) SetTTL(ttl time.Duration) Envelope {
 	return e
 }
 
-// SetTTL implements the SetTTL method of the RWEnvelop interface
+// SetNamespace implements the SetNamespace method of the RWEnvelop interface
 func (e *envelope) SetNamespace(nspace string) Envelope {
 	e.namespace = nspace
 	return e

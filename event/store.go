@@ -2,8 +2,9 @@ package event
 
 import (
 	"context"
-	"errors"
 	"time"
+
+	"github.com/ln80/event-store/event/errors"
 )
 
 var (
@@ -13,17 +14,18 @@ var (
 	ErrLoadEventFailed         = errors.New("load events failure")
 )
 
-// AppendOptions presents a generic definition of write operation options.
+// AppendConfig presents a generic definition of write operation options.
 // the behavior might differs based on the event store implementation.
-type AppendOptions struct {
-	AddToTx func(ctx context.Context) []any
+type AppendConfig struct {
+	AddToTx    func(ctx context.Context) (items []any)
+	AddTracing func(ctx context.Context) (traceID string)
 }
 
 // Store defines the interface of the event logging store aka timestamp-based event store.
 // Check sourcing package for a version-based Store interface definition.
 type Store interface {
 	// Append save a chunk (aka record) of events into a stream
-	Append(ctx context.Context, id StreamID, events []Envelope, optFns ...func(*AppendOptions)) error
+	Append(ctx context.Context, id StreamID, events []Envelope, optFns ...func(*AppendConfig)) error
 	// Load events from a stream based on the given timestamp range
 	Load(ctx context.Context, id StreamID, trange ...time.Time) ([]Envelope, error)
 }

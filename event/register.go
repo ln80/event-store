@@ -2,11 +2,12 @@ package event
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"reflect"
 	"strings"
 	"sync"
+
+	"github.com/ln80/event-store/event/errors"
 )
 
 const GlobalRegistryName = ""

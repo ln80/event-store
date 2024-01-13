@@ -2,10 +2,11 @@ package event
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"math"
 	"strconv"
+
+	"github.com/ln80/event-store/event/errors"
 )
 
 var (
