@@ -78,3 +78,13 @@ elastic/integ-test/run:
 elastic/integ-test/logs:
 	cd $(ELASTIC_DIR); \
 	sam logs --stack-name $(TEST_STACK_NAME) --region $(TEST_REGION) --tail
+
+
+elastic/integ-test/xray:
+	docker run --rm \
+		--env AWS_ACCESS_KEY_ID=$$(aws configure get aws_access_key_id) \
+		--env AWS_SECRET_ACCESS_KEY=$$(aws configure get aws_secret_access_key) \
+		--env AWS_REGION=eu-west-1 \
+		--name xray-daemon \
+		--publish 2000:2000/udp \
+		amazon/aws-xray-daemon -o

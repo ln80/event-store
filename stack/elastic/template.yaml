@@ -27,7 +27,7 @@ Parameters:
     Type: String
     MinLength: '3'
     Description: |
-      Serverless application name mainly used as prefix for resource names
+      Serverless application name mainly used as prefix for its under resource names.
 
   DynamoDBBillingMode:
     Type: String
@@ -48,13 +48,13 @@ Parameters:
     Type: String
     Default: ""
     Description: |
-      Serverless application name mainly used as prefix for resource names
+      AlarmSNSTopicArn receives alarms when indexing and forwarding lambdas are facing issues.
 
   PublishSNSTopicArn:
     Type: String
     Default: ""
     Description: |
-      SNS topic ARN to publish events to
+      SNS topic ARN to forward events to.
 
   BatchRecordEnabled:
     Type: String
@@ -63,7 +63,7 @@ Parameters:
       - "false"
       - "true"
     Description: |
-      BatchRecordEnabled indicates wether record events have to be published in a single message or not
+      BatchRecordEnabled indicates wether or not record events have to be published in a single message or as batch.
 
   EncodingFormat:
     Type: String
@@ -71,10 +71,15 @@ Parameters:
     AllowedValues:
       - "JSON"
       - "AVRO"
+    Description: |
+      EncodingFormat of events. It should be changed. Otherwise this might create some inconsistencies.
 
-  GlueSchemaRegistryName:
+  AvroGlueSchemaRegistryName:
     Type: String
     Default: ""
+    Description: |
+      AvroGlueSchemaRegistryName is the name of schema registry used by AVRO Event Serializer. 
+      It's Mainly used by forwarder to add global stream sequence to events before forwarding.
   
   RetainResource:
     Type: String
@@ -83,31 +88,68 @@ Parameters:
       - "false"
       - "true"
     Description: |
-      RetainResource indicates if event store data is subject to deletion or not
+      RetainResource indicates if the Event Store table is subject to deletion or not.
+
+  Tracing:
+    Type: String
+    Default: "Disabled"
+    AllowedValues:
+      - "Disabled"
+      - "Active"
+    Description: |
+      Tracing enable or disable x-ray tracing for Lambda functions.
+
+  VerbosityLevel: 
+    Type: Number
+    Default: 1
+    Description: |
+      VerbosityLevel number define the max log verbosity level, e.g, '0' for Info only, '1' to include debug
 
 Conditions:
   MustEnableAlarm: !Not
     - !Equals
       - !Ref AlarmSNSTopicArn
       - ''
-
-  MustPublish:
+  MustForward:
     !Not
       - !Equals
         - ''
         - !Ref PublishSNSTopicArn
-
   MustRetainResource:
     !Equals
       - !Ref RetainResource
       - "true"
-
   MustUseAvro:
     !Equals
       - !Ref EncodingFormat
       - "AVRO"
 
+Globals:
+  Function:
+    Timeout: 5
+    Runtime: provided.al2
+    Handler: bootstrap
+    Architectures: [ arm64 ]
+    Tracing: !Ref Tracing
+    ReservedConcurrentExecutions: 10
+    Environment:
+      Variables:
+        VERBOSITY_LEVEL: !Ref VerbosityLevel
+        ENCODING_FORMAT: !Sub 
+                - "{{resolve:ssm:${ParameterName}}}"
+                - { ParameterName: !Ref EncodingFormatParameter }
+        AVRO_GLUE_SCHEMA_REGISTRY: !Ref AvroGlueSchemaRegistryName
+
 Resources:
+  EncodingFormatParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /${Name}/event-encoding-format
+      Type: String
+      Value: !Ref EncodingFormat
+      Description: Events encoding format. It should not be updated after stack creation
+      AllowedPattern: "^[a-zA-Z]{1,10}$"
+        
   EventTable:
     Type: AWS::DynamoDB::Table
     DeletionPolicy: !If
@@ -130,7 +172,6 @@ Resources:
           -
             AttributeName: _lsik
             AttributeType: S
-        
         KeySchema:
           -
             AttributeName: _pk
@@ -138,7 +179,6 @@ Resources:
           -
             AttributeName: _sk
             KeyType: RANGE
-        
         LocalSecondaryIndexes:
           - 
             IndexName: _lsi
@@ -151,16 +191,13 @@ Resources:
                 KeyType: RANGE
             Projection:
               ProjectionType: 'ALL'
-        
         TimeToLiveSpecification:
             AttributeName: _ttl
             Enabled: true
-        
         BillingMode: !Ref DynamoDBBillingMode
         ProvisionedThroughput:
           ReadCapacityUnits: !Ref DynamoDBReadCapacity
           WriteCapacityUnits: !Ref DynamoDBWriteCapacity
-        
         StreamSpecification:
           StreamViewType: NEW_IMAGE
 
@@ -172,14 +209,13 @@ Resources:
         ReceiveMessageWaitTimeSeconds: 20
         VisibilityTimeout: 180
 
-  PublisherDeadLetterQueue:
+  ForwarderDeadLetterQueue:
     Type: AWS::SQS::Queue
     Properties:
-        QueueName: !Sub ${Name}-publisher-dlq
+        QueueName: !Sub ${Name}-forwarder-dlq
         MessageRetentionPeriod: 1209600 # 14 days
         ReceiveMessageWaitTimeSeconds: 20
         VisibilityTimeout: 180
-
 
   # LAMBDA FUNCTIONS:
   
@@ -188,25 +224,21 @@ Resources:
     Metadata:
       BuildMethod: go1.x
     Properties:
-      FunctionName: !Sub ${Name}-IndexerFunction
-      Timeout: 5
+      FunctionName: !Sub ${Name}-Indexer
       CodeUri: indexer/
-      Runtime: provided.al2
-      Handler: bootstrap
-      Architectures: [ arm64 ]
       Events:
         StreamEvent:
           Type: DynamoDB
           Properties:
             Stream: !GetAtt EventTable.StreamArn
             StartingPosition: TRIM_HORIZON
+            BatchSize: 1 # much safer
             BisectBatchOnFunctionError: false
             ParallelizationFactor: 1
-            # MaximumRecordAgeInSeconds: -1
-            # MaximumRetryAttempts: -1
             MaximumRetryAttempts: 1000
             DestinationConfig:
               OnFailure:
+                Type: SQS
                 Destination: !GetAtt IndexerDeadLetterQueue.Arn
             FilterCriteria:
               Filters:
@@ -221,17 +253,16 @@ Resources:
           Variables:
             DYNAMODB_TABLE: !Ref EventTable
 
-  
   IndexerCloudWatchAlarm:
     Type: 'AWS::CloudWatch::Alarm'
     Condition: MustEnableAlarm
     Properties:
       ActionsEnabled: true
-      AlarmDescription: !Sub 'Indexing global stream has failed.'
+      AlarmDescription: !Sub 'Indexing a global stream is facing issues'
       ComparisonOperator: GreaterThanOrEqualToThreshold
       Dimensions:
         - Name: FunctionName
-          Value: !Sub ${Name}-IndexerFunction
+          Value: !Sub ${Name}-Indexer
       EvaluationPeriods: 1
       MetricName: Errors
       Namespace: AWS/Lambda
@@ -241,25 +272,21 @@ Resources:
       AlarmActions:
         - !Ref AlarmSNSTopicArn
 
-
-  PublisherFunction:
+  ForwarderFunction:
       Type: AWS::Serverless::Function
-      Condition: MustPublish
+      Condition: MustForward
       Metadata:
         BuildMethod: go1.x
       Properties:
-        FunctionName: !Sub ${Name}-PublisherFunction
-        Timeout: 5
-        CodeUri: publisher/
-        Runtime: provided.al2
-        Handler: bootstrap
-        Architectures: [ arm64 ]
+        FunctionName: !Sub ${Name}-Forwarder
+        CodeUri: forwarder/
         Events:
           StreamEvent:
             Type: DynamoDB
             Properties:
               Stream: !GetAtt EventTable.StreamArn
               StartingPosition: TRIM_HORIZON
+              BatchSize: 1
               BisectBatchOnFunctionError: false
               ParallelizationFactor: 1
               # MaximumRecordAgeInSeconds: -1
@@ -267,14 +294,14 @@ Resources:
               MaximumRetryAttempts: 1000
               DestinationConfig:
                 OnFailure:
-                  Destination: !GetAtt PublisherDeadLetterQueue.Arn
+                  Destination: !GetAtt ForwarderDeadLetterQueue.Arn
               FilterCriteria:
                 Filters:
                   - Pattern: '{"eventName": ["MODIFY"], "dynamodb": { "Keys" : {"_pk": {"S": [{"anything-but": [ "internal" ]}]}}}}'
         Policies:
           - AWSLambdaDynamoDBExecutionRole
           - SQSSendMessagePolicy:
-              QueueName: !GetAtt PublisherDeadLetterQueue.QueueName
+              QueueName: !GetAtt ForwarderDeadLetterQueue.QueueName
           - Version: '2012-10-17'
             Statement:
               - Effect: Allow
@@ -283,43 +310,23 @@ Resources:
                 Resource: !Ref PublishSNSTopicArn
           - !If
             - MustUseAvro
-            - Version: '2012-10-17'
-              Statement:
-                - Effect: Allow
-                  Action:
-                    - glue:GetSchemaVersion
-                    - glue:GetSchema
-                    - glue:GetSchemaByDefinition
-                    - glue:CreateSchema
-                    - glue:RegisterSchemaVersion
-                  Resource:
-                    # seems that glue:GetSchemaVersion action requires wildcard as resource :(
-                    - "*"
-                    # - !Sub
-                    #   - "arn:aws:glue:${AWS::Region}:${AWS::AccountId}:schema/${RegistryName}/*"
-                    #   - { RegistryName: !Ref GlueSchemaRegistryName }
-                    # - !Sub
-                    #   - "arn:aws:glue:${AWS::Region}:${AWS::AccountId}:registry/${RegistryName}"
-                    #   - { RegistryName: !Ref GlueSchemaRegistryName }
-                    
+            - AWSGlueSchemaRegistryReadonlyAccess
             - !Ref AWS::NoValue
         Environment:
             Variables:
               SNS_TOPIC: !Ref PublishSNSTopicArn
               BATCH_RECORD_ENABLED: !Ref BatchRecordEnabled
-              ENCODING_FORMAT: !Ref EncodingFormat
-              GlUE_SCHEMA_REGISTRY: !Ref GlueSchemaRegistryName
 
-  PublisherCloudWatchAlarm:
+  ForwarderCloudWatchAlarm:
     Type: 'AWS::CloudWatch::Alarm'
     Condition: MustEnableAlarm
     Properties:
       ActionsEnabled: true
-      AlarmDescription: !Sub 'Publishing events to SNS topic has failed'
+      AlarmDescription: !Sub 'Forwarding events to SNS topic is facing issues'
       ComparisonOperator: GreaterThanOrEqualToThreshold
       Dimensions:
         - Name: FunctionName
-          Value: !Sub ${Name}-PublisherFunction
+          Value: !Sub ${Name}-Forwarder
       EvaluationPeriods: 1
       MetricName: Errors
       Namespace: AWS/Lambda

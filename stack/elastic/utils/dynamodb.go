@@ -5,6 +5,7 @@ import (
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/ln80/event-store/dynamodb"
 )
 
 // FromDynamoDBEventMap converts a map of Lambda Event DynamoDB
@@ -84,4 +85,19 @@ func FromDynamoDBEventAV(from events.DynamoDBAttributeValue) (types.AttributeVal
 	default:
 		return nil, fmt.Errorf("unknown AttributeValue union member, %T", from)
 	}
+}
+
+func RecordKeys(event map[string]events.DynamoDBAttributeValue) map[string]string {
+	return map[string]string{
+		dynamodb.HashKey:  event[dynamodb.HashKey].String(),
+		dynamodb.RangeKey: event[dynamodb.RangeKey].String(),
+	}
+}
+
+func RecordHashKey(event map[string]events.DynamoDBAttributeValue) string {
+	return event[dynamodb.HashKey].String()
+}
+
+func RecordRangeKey(event map[string]events.DynamoDBAttributeValue) string {
+	return event[dynamodb.HashKey].String()
 }

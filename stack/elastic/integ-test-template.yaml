@@ -12,6 +12,7 @@ Resources:
   ConsumerTopic:
     Type: AWS::SNS::Topic
     Properties: 
+      TracingConfig: Active # ATM only supported for standard topics using cloudformation; figure out an alternative
       ContentBasedDeduplication: True
       TopicName: !Sub ${AWS::StackName}-consumer-topic.fifo
       FifoTopic: True
@@ -63,7 +64,8 @@ Resources:
         Name: !Sub ${AWS::StackName}-event-store
         PublishSNSTopicArn: !Ref ConsumerTopic
         EncodingFormat: "AVRO"
-        GlueSchemaRegistryName: !Sub ${AWS::StackName}-event-schema-registry
+        AvroGlueSchemaRegistryName: !Sub ${AWS::StackName}-event-schema-registry
+        Tracing: Active
 
 Outputs:
   ConsumerQueueUrl:
