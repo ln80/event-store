@@ -6,8 +6,8 @@ import (
 
 	es "github.com/ln80/event-store"
 	"github.com/ln80/event-store/memory"
-	"github.com/ln80/event-store/testutil"
 
+	"github.com/ln80/event-store/internal/testutil"
 	"github.com/ln80/pii"
 	pii_memory "github.com/ln80/pii/memory"
 )
