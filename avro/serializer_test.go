@@ -7,7 +7,7 @@ import (
 
 	avro_memory "github.com/ln80/event-store/avro/memory"
 	"github.com/ln80/event-store/event"
-	"github.com/ln80/event-store/testutil"
+	"github.com/ln80/event-store/internal/testutil"
 )
 
 func BenchmarkSerializer(b *testing.B) {

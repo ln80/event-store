@@ -92,7 +92,7 @@ func (e *jsonEvent) Event() any {
 		return e.fEvent
 	}
 
-	log := logger.Default().
+	log := logger.Default().WithName("avro").
 		WithValues(
 			"stmID", e.StreamID(),
 			"type", e.Type(),
@@ -164,6 +164,10 @@ func (e *jsonEvent) Dests() []string {
 
 func (e *jsonEvent) TTL() time.Duration {
 	return e.FTTL
+}
+
+func (e *jsonEvent) Namespace() string {
+	return e.Namespace()
 }
 
 func (e *jsonEvent) SetGlobalVersion(v event.Version) event.Envelope {

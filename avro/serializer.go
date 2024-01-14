@@ -46,7 +46,7 @@ func NewEventSerializer(ctx context.Context, registry avro_registry.Registry, op
 		err error
 	)
 
-	log := logger.Default().WithName("avro").WithValues("namespace", cfg.Namespace)
+	log := logger.FromContext(ctx).WithName("avro").WithValues("namespace", cfg.Namespace)
 
 	if !cfg.SkipCurrentSchema {
 		sch, err = eventSchema(registry.API(), cfg.Namespace)

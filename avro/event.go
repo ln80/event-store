@@ -59,7 +59,7 @@ type avroEvent struct {
 	FRawEvent any `avro:"Data" schema:"union"`
 
 	// schemaID used by avro registries to allow re-encoding the event using the same schema.
-	_schemaID string
+	avroSchemaID string
 }
 
 var _ event.Envelope = &avroEvent{}
@@ -84,7 +84,7 @@ func (e *avroEvent) Event() any {
 			"ver", e.Version(),
 		)
 	log.V(1).Info("Unexpected empty event data")
-	log.V(3).Info("Perhaps event type is no longer part of any registered Avro schemas", "embeddedSchemaID", e._schemaID)
+	log.V(3).Info("Perhaps event type is no longer part of any registered Avro schemas", "schemaID", e.avroSchemaID)
 
 	e.fEvent = noEvent
 	return nil
@@ -161,11 +161,11 @@ func (e *avroEvent) Transform(fn func(any) any) {
 }
 
 func (e *avroEvent) SetAVROSchemaID(id string) {
-	e._schemaID = id
+	e.avroSchemaID = id
 }
 
 func (e *avroEvent) AVROSchemaID() string {
-	return e._schemaID
+	return e.avroSchemaID
 }
 
 // checkType does change event type name in the envelope to match
@@ -198,7 +198,7 @@ func (e *avroEvent) checkType(namespace string) {
 
 	t := event.TypeOfWithNamespace(namespace, data)
 	if t != e.FType {
-		logger.Default().WithName("avro").V(1).Info("Event type name has upgraded",
+		logger.Default().WithName("avro").V(1).Info("Event type name has been upgraded",
 			"stmID", e.StreamID(),
 			"old_type", e.FType,
 			"type", t,
