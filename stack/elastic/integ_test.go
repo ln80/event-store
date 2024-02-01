@@ -16,13 +16,14 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/aws/aws-xray-sdk-go/instrumentation/awsv2"
 	"github.com/aws/aws-xray-sdk-go/xray"
+	es "github.com/ln80/event-store"
 	"github.com/ln80/event-store/avro"
 	"github.com/ln80/event-store/avro/glue"
 	"github.com/ln80/event-store/dynamodb"
 	"github.com/ln80/event-store/event"
 	"github.com/ln80/event-store/internal/logger"
 	"github.com/ln80/event-store/internal/testutil"
-	"github.com/ln80/event-store/stack/elastic/utils"
+	"github.com/ln80/event-store/stack/elastic/shared"
 )
 
 func init() {
@@ -94,18 +95,21 @@ func TestIntegration(t *testing.T) {
 		ctx,
 		glue.NewRegistry(
 			registryName,
-			utils.InitGlueClient(cfg),
+			shared.InitGlueClient(cfg),
 		),
 		func(esc *avro.EventSerializerConfig) {
 			esc.Namespace = ""
 		},
 	)
 
-	store := dynamodb.NewEventStore(utils.InitDynamodbClient(cfg), table, func(sc *dynamodb.StoreConfig) {
-		sc.Serializer = serializer
-	})
-
-	// xray.Handler()
+	store := es.NewElasticStore(
+		table,
+		func(esc *es.ElasticStoreConfig) {
+			esc.DynamodbClient = shared.InitDynamodbClient(cfg)
+			esc.AddDynamodbStoreOption(func(sc *dynamodb.StoreConfig) {
+				sc.Serializer = serializer
+			})
+		})
 
 	testutil.TestEventLoggingStore(t, ctx, store)
 
@@ -118,9 +122,9 @@ func TestIntegration(t *testing.T) {
 		}
 	})
 
-	// assert that a sample of events were forwarded to consumer queue
+	// assert that a sample of events were forwarded to the queue.
 	if err := retry(2, time.Second, func() error {
-		output, err := sqs.NewFromConfig(cfg).ReceiveMessage(context.TODO(), &sqs.ReceiveMessageInput{
+		output, err := sqs.NewFromConfig(cfg).ReceiveMessage(ctx, &sqs.ReceiveMessageInput{
 			QueueUrl:            &queueUrl,
 			MaxNumberOfMessages: 10,
 			// AttributeNames: []types.QueueAttributeName{

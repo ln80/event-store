@@ -6,26 +6,33 @@ import (
 	"os"
 
 	"github.com/aws/aws-lambda-go/lambda"
+	appconfig "github.com/ln80/event-store/appconfig"
 	"github.com/ln80/event-store/avro"
 	"github.com/ln80/event-store/avro/glue"
+	"github.com/ln80/event-store/control"
 	"github.com/ln80/event-store/event"
 	"github.com/ln80/event-store/internal/logger"
 	"github.com/ln80/event-store/json"
 	"github.com/ln80/event-store/sns"
-	"github.com/ln80/event-store/stack/elastic/utils"
+	"github.com/ln80/event-store/stack/elastic/shared"
 )
 
 var (
-	pub        event.Publisher
+	publisher event.Publisher
+
 	serializer event.Serializer
+
+	emergencyRedirect shared.EmergencyRedirectFunc
 )
 
-func init() {
-	utils.InitLogger("elastic")
+func main() {
+	ctx := context.Background()
 
-	cfg := utils.MustLoadConfig()
+	shared.InitLogger("elastic")
 
-	format := utils.MustGetenv("ENCODING_FORMAT")
+	cfg := shared.MustLoadConfig()
+
+	format := shared.MustGetenv("ENCODING_FORMAT")
 	switch format {
 	case "JSON":
 		serializer = json.NewEventSerializer("")
@@ -33,8 +40,8 @@ func init() {
 		serializer = avro.NewEventSerializer(
 			context.Background(),
 			glue.NewRegistry(
-				utils.MustGetenv("AVRO_GLUE_SCHEMA_REGISTRY"),
-				utils.InitGlueClient(cfg),
+				shared.MustGetenv("AVRO_GLUE_SCHEMA_REGISTRY"),
+				shared.InitGlueClient(cfg),
 			),
 			func(esc *avro.EventSerializerConfig) {
 				esc.SkipCurrentSchema = true
@@ -45,12 +52,34 @@ func init() {
 		os.Exit(1)
 	}
 
-	pub = sns.NewPublisher(utils.InitSNSClient(cfg), utils.MustGetenv("SNS_TOPIC"), func(cfg *sns.PublisherConfig) {
-		cfg.BatchRecordEnabled = utils.MustGetenv("BATCH_RECORD_ENABLED") == "true"
+	publisher = sns.NewPublisher(shared.InitSNSClient(cfg), shared.MustGetenv("SNS_TOPIC"), func(cfg *sns.PublisherConfig) {
+		cfg.BatchRecordEnabled = shared.MustGetenv("BATCH_RECORD_ENABLED") == "true"
 		cfg.Serializer = serializer
 	})
-}
 
-func main() {
-	lambda.Start(makeHandler(pub, serializer))
+	found, application, environment, configuration := shared.MustParseConfigPathEnv()
+	if found {
+		loader, err := appconfig.NewLoader(ctx, shared.InitAppConfigClient(cfg), func(lc *appconfig.LoaderConfig) {
+			lc.Application = application
+			lc.Environment = environment
+			lc.Configuration = configuration
+		})
+		if err != nil {
+			logger.Default().Error(err, "")
+			os.Exit(1)
+		}
+		featureToggler, err := control.NewFeatureToggler(ctx, loader)
+		if err != nil {
+			logger.Default().Error(err, "")
+			os.Exit(1)
+		}
+
+		emergencyRedirect = shared.MakeEmergencyRedirect(
+			shared.InitSNSClient(cfg),
+			shared.MustGetenv("EMERGENCY_REDIRECT_FIFO_TOPIC"),
+			featureToggler,
+		)
+	}
+
+	lambda.Start(makeHandler(publisher, serializer, emergencyRedirect))
 }

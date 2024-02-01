@@ -7,19 +7,19 @@ import (
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/aws/aws-xray-sdk-go/xray"
+	"github.com/ln80/event-store/control"
 	"github.com/ln80/event-store/dynamodb"
 	"github.com/ln80/event-store/internal/logger"
-	"github.com/ln80/event-store/stack/elastic/utils"
+	"github.com/ln80/event-store/stack/elastic/shared"
 )
 
 type handler func(ctx context.Context, event events.DynamoDBEvent) error
 
-func makeHandler(indexer dynamodb.Indexer) handler {
+func makeHandler(indexer dynamodb.Indexer, redirect shared.EmergencyRedirectFunc) handler {
 	return func(ctx context.Context, event events.DynamoDBEvent) error {
-		ctx = utils.HackCtx(ctx)
+		ctx = shared.HackCtx(ctx)
 		for _, ev := range event.Records {
-			if err := handleRecord(ctx, indexer, ev); err != nil {
+			if err := handleRecord(ctx, indexer, redirect, ev); err != nil {
 				return err
 			}
 		}
@@ -27,37 +27,39 @@ func makeHandler(indexer dynamodb.Indexer) handler {
 	}
 }
 
-func handleRecord(ctx context.Context, indexer dynamodb.Indexer, ev events.DynamoDBEventRecord) (err error) {
-	if utils.RecordHashKey(ev.Change.Keys) == "internal" {
+func handleRecord(ctx context.Context, indexer dynamodb.Indexer, redirect shared.EmergencyRedirectFunc, ev events.DynamoDBEventRecord) (err error) {
+	if shared.RecordHashKey(ev.Change.Keys) == "internal" {
 		return
 	}
-	raw := ev.Change.NewImage
 
-	log := logger.WithStream(logger.Default(), raw[dynamodb.GIDAttribute].String()).
-		WithValues("record", utils.RecordKeys(ev.Change.Keys))
-	if t, ok := raw[dynamodb.TraceIDAttribute]; ok {
-		var (
-			seg *xray.Segment
-		)
-		ctx, seg = utils.WithTracing(ctx, t.String(), "Indexer", "gstmID", raw[dynamodb.GIDAttribute].String())
-		if seg != nil {
-			log = logger.WithTrace(log, seg.TraceID)
-			defer seg.Close(err)
+	ctx, close := shared.WithRecordContext(ctx, ev)
+	defer close(err)
+
+	log := logger.FromContext(ctx)
+
+	var redirected bool
+	if redirect != nil {
+		redirected, err = redirect(ctx, ev, control.INDEX)
+		if err != nil {
+			return
+		}
+		if redirected {
+			log.Info("event was redirected to emergency destination", "action", control.INDEX)
+			return
 		}
 	}
-	ctx = logger.NewContext(ctx, log)
 
 	switch ev.EventName {
 	case "INSERT":
 		rec := dynamodb.Record{
 			Item: dynamodb.Item{
-				HashKey:  raw["_pk"].String(),
-				RangeKey: raw["_sk"].String(),
+				HashKey:  ev.Change.NewImage["_pk"].String(),
+				RangeKey: ev.Change.NewImage["_sk"].String(),
 			},
 		}
 
 		var attrMap map[string]types.AttributeValue
-		attrMap, err = utils.FromDynamoDBEventAVMap(ev.Change.NewImage)
+		attrMap, err = shared.FromDynamoDBEventAVMap(ev.Change.NewImage)
 		if err != nil {
 			return
 		}
