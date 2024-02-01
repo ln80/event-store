@@ -166,10 +166,6 @@ func (e *jsonEvent) TTL() time.Duration {
 	return e.FTTL
 }
 
-func (e *jsonEvent) Namespace() string {
-	return e.Namespace()
-}
-
 func (e *jsonEvent) SetGlobalVersion(v event.Version) event.Envelope {
 	e.fGlobalVersion = v
 	e.FRawGlobalVersion = e.fGlobalVersion.String()

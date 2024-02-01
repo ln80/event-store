@@ -129,7 +129,10 @@ func NewFeatureToggler(ctx context.Context, loader Loader, opts ...func(*Feature
 
 	f.cache.Store(cache)
 
-	go f.watch(ctx)
+	go func() {
+		// TBD ignore watch err at the moment
+		_ = f.watch(ctx)
+	}()
 
 	return f, nil
 }
