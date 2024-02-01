@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -20,19 +21,21 @@ func TestDecorator(t *testing.T) {
 
 	var store es.EventStore = memory.NewEventStore()
 
-	idx := 0
+	var idx atomic.Int32
+
 	l1 := func(ctx context.Context) ([]byte, error) {
+		i := idx.Load()
+
 		tg := &Toggles{
 			Append: false,
 			Index:  true,
 		}
-		if idx > 1 {
+		if i >= 1 {
 			tg = &Toggles{
 				Append: true,
 				Index:  true,
 			}
 		}
-		idx++
 		return json.Marshal(Configuration{
 			Default: tg,
 		})
@@ -56,7 +59,9 @@ func TestDecorator(t *testing.T) {
 		t.Fatalf("expect %v, %v be equals", want, got)
 	}
 
-	time.Sleep(f.cfg.CacheMaxAge)
+	// make sure current toggles cache is reloaded with different value.
+	idx.Add(1)
+	time.Sleep(2 * f.cfg.CacheMaxAge)
 
 	if err = store.Append(ctx, streamID, evts); err != nil {
 		t.Fatal("expect err be nil, got", err)

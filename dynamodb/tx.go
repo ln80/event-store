@@ -72,6 +72,7 @@ func (s *Session) addConsumedCapacity(out any) {
 	}
 	if o, ok := out.(*dynamodb.TransactWriteItemsOutput); ok && o != nil {
 		for _, cc := range o.ConsumedCapacity {
+			cc := cc
 			addConsumedCapacity(s.cc, &cc)
 		}
 		return

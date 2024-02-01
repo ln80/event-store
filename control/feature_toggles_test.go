@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -128,10 +129,10 @@ func TestFeatureToggle(t *testing.T) {
 func TestFeatureToggle_WithLoadError(t *testing.T) {
 	ctx := context.Background()
 
+	var idx atomic.Int32
 	makeLoader := func() func(context.Context) ([]byte, error) {
-		idx := 0
 		return func(ctx context.Context) ([]byte, error) {
-			defer func() { idx++ }()
+			i := idx.Load()
 			c := Configuration{
 				Streams: []StreamToggles{
 					{
@@ -139,7 +140,7 @@ func TestFeatureToggle_WithLoadError(t *testing.T) {
 					},
 				},
 			}
-			if idx > 0 {
+			if i > 0 {
 				return nil, errors.New("infra error")
 			}
 			return json.Marshal(c)
@@ -154,6 +155,8 @@ func TestFeatureToggle_WithLoadError(t *testing.T) {
 		t.Fatal("expect err be nil, got", err)
 	}
 
+	// make sure current toggles cache is reloaded with different value.
+	idx.Add(1)
 	time.Sleep(f.cfg.CacheMaxAge)
 
 	_, err = f.getRecentConfiguration(ctx)

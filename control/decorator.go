@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"log"
 
 	es "github.com/ln80/event-store"
 	"github.com/ln80/event-store/event"
@@ -27,6 +28,7 @@ func (d *Decorator) Append(ctx context.Context, id event.StreamID, events []even
 		return err
 	}
 
+	log.Printf("---> toggles %+v", toggles)
 	if err := toggles.Enabled(APPEND); err != nil {
 		return errors.Err(event.ErrAppendEventsFailed, id.String(), err)
 	}
