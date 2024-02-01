@@ -118,11 +118,11 @@ func (s *Session) CommitTx(ctx context.Context) (err error) {
 			var out any
 			defer s.addConsumedCapacity(out)
 			if op.put != nil {
-				out, err = s.api.PutItem(ctx, op.put)
+				_, err = s.api.PutItem(ctx, op.put)
 				return
 			}
 			if op.update != nil {
-				out, err = s.api.UpdateItem(ctx, op.update)
+				_, err = s.api.UpdateItem(ctx, op.update)
 				return
 			}
 			if op.delete != nil {
