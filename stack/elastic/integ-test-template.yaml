@@ -66,10 +66,6 @@ Resources:
         EncodingFormat: "AVRO"
         AvroGlueSchemaRegistryName: !Sub ${AWS::StackName}-event-schema-registry
         Tracing: Active
-        # FeatureTogglesConfigurationPath: application/ory5sav/environment/aqgjkm1/configuration/mivqe3u
-        # ForwarderDeadLetterTopicArn: ""
-        # IndexerDeadLetterTopicArn: ""
-        # EmergencyRedirectFifoTopicArn: !Ref ConsumerTopic
 
 Outputs:
   ConsumerQueueUrl:
