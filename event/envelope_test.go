@@ -26,31 +26,31 @@ func TestEnvelope(t *testing.T) {
 		}
 		evts := Wrap(ctx, stmID, events)
 		for i, evt := range evts {
-			if want, val := globalID, evt.GlobalStreamID(); want != val {
-				t.Fatalf("expect %v, %v be equals", want, val)
+			if want, got := globalID, evt.GlobalStreamID(); want != got {
+				t.Fatalf("expect %v, %v be equals", want, got)
 			}
-			if want, val := stmID.String(), evt.StreamID(); want != val {
-				t.Fatalf("expect %v, %v be equals", want, val)
+			if want, got := stmID.String(), evt.StreamID(); want != got {
+				t.Fatalf("expect %v, %v be equals", want, got)
 			}
-			if want, val := VersionZero, evt.Version(); want != val {
-				t.Fatalf("expect %v, %v be equals", want, val)
+			if want, got := VersionZero, evt.Version(); want != got {
+				t.Fatalf("expect %v, %v be equals", want, got)
 			}
-			if want, val := VersionZero, evt.GlobalVersion(); want != val {
-				t.Fatalf("expect %v, %v be equals", want, val)
+			if want, got := VersionZero, evt.GlobalVersion(); want != got {
+				t.Fatalf("expect %v, %v be equals", want, got)
 			}
-			if want, val := events[i], evt.Event(); want != val {
-				t.Fatalf("expect %v, %v be equals", want, val)
+			if want, got := events[i], evt.Event(); want != got {
+				t.Fatalf("expect %v, %v be equals", want, got)
 			}
-			if want, val := "", evt.User(); want != val {
-				t.Fatalf("expect %v, %v be equals", want, val)
+			if want, got := "", evt.User(); want != got {
+				t.Fatalf("expect %v, %v be equals", want, got)
 			}
 			if i%2 == 0 {
-				if want, val := TypeOf(testutil.Event{}), evt.Type(); want != val {
-					t.Fatalf("expect %v, %v be equals", want, val)
+				if want, got := TypeOf(testutil.Event{}), evt.Type(); want != got {
+					t.Fatalf("expect %v, %v be equals", want, got)
 				}
 			} else {
-				if want, val := TypeOf(testutil.Event2{}), evt.Type(); want != val {
-					t.Fatalf("expect %v, %v be equals", want, val)
+				if want, got := TypeOf(testutil.Event2{}), evt.Type(); want != got {
+					t.Fatalf("expect %v, %v be equals", want, got)
 				}
 			}
 			if ok := evt.At().After(time.Now().Add(-1 * time.Second)); !ok {
@@ -78,16 +78,16 @@ func TestEnvelope(t *testing.T) {
 		}
 		evts := Wrap(ctx, stmID, events)
 		for i, evt := range evts {
-			if want, val := user, evt.User(); want != val {
-				t.Fatalf("expect %v, %v be equals", want, val)
+			if want, got := user, evt.User(); want != got {
+				t.Fatalf("expect %v, %v be equals", want, got)
 			}
 			if i%2 == 0 {
-				if want, val := TypeOfWithContext(ctx, testutil.Event{}), evt.Type(); want != val {
-					t.Fatalf("expect %v, %v be equals", want, val)
+				if want, got := TypeOfWithContext(ctx, testutil.Event{}), evt.Type(); want != got {
+					t.Fatalf("expect %v, %v be equals", want, got)
 				}
 			} else {
-				if want, val := TypeOfWithContext(ctx, testutil.Event2{}), evt.Type(); want != val {
-					t.Fatalf("expect %v, %v be equals", want, val)
+				if want, got := TypeOfWithContext(ctx, testutil.Event2{}), evt.Type(); want != got {
+					t.Fatalf("expect %v, %v be equals", want, got)
 				}
 			}
 		}
@@ -130,29 +130,29 @@ func TestEnvelope(t *testing.T) {
 			nil,
 		)
 		for i, evt := range evts {
-			if want, val := user, evt.User(); want != val {
-				t.Fatalf("expect %v, %v be equals", want, val)
+			if want, got := user, evt.User(); want != got {
+				t.Fatalf("expect %v, %v be equals", want, got)
 			}
-			if want, val := ver0.Add(uint64(i), 0), evt.Version(); want != val {
-				t.Fatalf("expect %v, %v be equals", want, val)
+			if want, got := ver0.Add(uint64(i), 0), evt.Version(); want != got {
+				t.Fatalf("expect %v, %v be equals", want, got)
 			}
-			if want, val := ver0.Add(uint64(i), 0), evt.GlobalVersion(); want != val {
-				t.Fatalf("expect %v, %v be equals", want, val)
+			if want, got := ver0.Add(uint64(i), 0), evt.GlobalVersion(); want != got {
+				t.Fatalf("expect %v, %v be equals", want, got)
 			}
 			if i%2 == 0 {
-				if want, val := TypeOfWithNamespace("foo", testutil.Event{}), evt.Type(); want != val {
-					t.Fatalf("expect %v, %v be equals", want, val)
+				if want, got := TypeOfWithNamespace("foo", testutil.Event{}), evt.Type(); want != got {
+					t.Fatalf("expect %v, %v be equals", want, got)
 				}
 			} else {
-				if want, val := TypeOfWithNamespace("foo", testutil.Event2{}), evt.Type(); want != val {
-					t.Fatalf("expect %v, %v be equals", want, val)
+				if want, got := TypeOfWithNamespace("foo", testutil.Event2{}), evt.Type(); want != got {
+					t.Fatalf("expect %v, %v be equals", want, got)
 				}
 			}
-			if want, val := tm0.Add(-5*time.Duration(i)*time.Second), evt.At(); !val.Equal(want) {
-				t.Fatalf("expect %v, %v be equals", want, val)
+			if want, got := tm0.Add(-5*time.Duration(i)*time.Second), evt.At(); !got.Equal(want) {
+				t.Fatalf("expect %v, %v be equals", want, got)
 			}
-			if want, val := []string{"dest_1"}, evt.Dests(); !reflect.DeepEqual(want, val) {
-				t.Fatalf("expect %v, %v be equals", want, val)
+			if want, got := []string{"dest_1"}, evt.Dests(); !reflect.DeepEqual(want, got) {
+				t.Fatalf("expect %v, %v be equals", want, got)
 			}
 		}
 	})
@@ -194,12 +194,12 @@ func TestEnvelope(t *testing.T) {
 		)
 		l := len(evts)
 		for i, evt := range evts {
-			want, val := ver0.Add(uint64(i), 0), evt.Version()
+			want, got := ver0.Add(uint64(i), 0), evt.Version()
 			if i == l-1 {
 				want = want.EOF()
 			}
-			if want != val {
-				t.Fatalf("expect %v, %v be equals", want, val)
+			if want != got {
+				t.Fatalf("expect %v, %v be equals", want, got)
 			}
 		}
 
@@ -210,12 +210,12 @@ func TestEnvelope(t *testing.T) {
 		)
 		l = len(evts)
 		for i, evt := range evts {
-			want, val := ver1.Add(0, uint8(i)), evt.Version()
+			want, got := ver1.Add(0, uint8(i)), evt.Version()
 			if i == l-1 {
 				want = want.EOF()
 			}
-			if want != val {
-				t.Fatalf("expect %v, %v be equals", want, val)
+			if want != got {
+				t.Fatalf("expect %v, %v be equals", want, got)
 			}
 		}
 	})
@@ -257,12 +257,12 @@ func TestEnvelope(t *testing.T) {
 		)
 		l := len(evts)
 		for i, evt := range evts {
-			want, val := ver0.Add(uint64(i), 0), evt.GlobalVersion()
+			want, got := ver0.Add(uint64(i), 0), evt.GlobalVersion()
 			if i == l-1 {
 				want = want.EOF()
 			}
-			if want != val {
-				t.Fatalf("expect %v, %v be equals", want, val)
+			if want != got {
+				t.Fatalf("expect %v, %v be equals", want, got)
 			}
 		}
 
@@ -273,12 +273,12 @@ func TestEnvelope(t *testing.T) {
 		)
 		l = len(evts)
 		for i, evt := range evts {
-			want, val := ver1.Add(0, uint8(i)), evt.GlobalVersion()
+			want, got := ver1.Add(0, uint8(i)), evt.GlobalVersion()
 			if i == l-1 {
 				want = want.EOF()
 			}
-			if want != val {
-				t.Fatalf("expect %v, %v be equals", want, val)
+			if want != got {
+				t.Fatalf("expect %v, %v be equals", want, got)
 			}
 		}
 	})

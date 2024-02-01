@@ -101,9 +101,10 @@ func (i *indexer) Index(ctx context.Context, rec Record) (err error) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 
+	oldGlobalID := i.checkpoint.globalID
 	swapped := i.checkpoint.swap(globalID)
 	if swapped {
-		log.V(1).Info("Current global stream changed", "old_gstmID", i.checkpoint.globalID, "new_gstmID", globalID)
+		log.V(1).Info("Current global stream changed", "old_gstmID", oldGlobalID, "new_gstmID", globalID)
 	} else {
 		log.V(1).Info("Current global stream remains the same")
 	}
@@ -230,6 +231,8 @@ func (ic *indexerCheckpoint) swap(id string) bool {
 	var swapped bool
 	if ic.globalID != id {
 		ic.globalID = id
+		ic.version = event.VersionZero
+		ic.key = ""
 		swapped = true
 	}
 

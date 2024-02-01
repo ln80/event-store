@@ -98,21 +98,21 @@ func ParseStreamID(streamID string) (StreamID, error) {
 // Stream presents a collection of consecutive events
 type Stream []Envelope
 
-// Cursor of stream of events, mainly used to validate stream sequence
+// Cursor is used to validate stream sequence.
 type Cursor struct {
 	StreamID string
 	Ver      Version
 	At       time.Time
 }
 
-// NewCursor returns Cursor
+// NewCursor returns a cursor for the given a stream
 func NewCursor(streamID string) *Cursor {
 	return &Cursor{
 		StreamID: streamID,
 	}
 }
 
-// resolveVer returns the event's local or global version
+// resolveVer returns either the local or the global version of the given event.
 func resolveVer(env Envelope, isGlobalStream bool) Version {
 	if isGlobalStream {
 		return env.GlobalVersion()
@@ -120,7 +120,7 @@ func resolveVer(env Envelope, isGlobalStream bool) Version {
 	return env.Version()
 }
 
-// resolveStreamID returns either the event's local or global streamID
+// resolveStreamID returns either the event's local or global stream ID.
 func resolveStreamID(env Envelope, isGlobalStream bool) string {
 	if isGlobalStream {
 		return env.GlobalStreamID()
@@ -128,15 +128,16 @@ func resolveStreamID(env Envelope, isGlobalStream bool) string {
 	return env.StreamID()
 }
 
-// ValidationBoundaries was helps to avoid noise when dealing with returned chunks
-// that contain additional events that exceed the query filter range.
-// Note that this case was relevant in an old S3-based implementation of the event store.
+// ValidationBoundaries filters extra events contained in the result's chunks.
+//
+// Note that this case was relevant for an old S3-based implementation of the event store;
+// It might be deprecated and removed later.
 type ValidationBoundaries struct {
 	Since, Until time.Time
 	From, To     Version
 }
 
-// Build applies default values if they are empty
+// Build applies ValidationBoundaries's default values if values are zero.
 func (vb *ValidationBoundaries) Build() {
 	if vb.Since.IsZero() {
 		vb.Since = time.Unix(0, 0)
@@ -237,7 +238,7 @@ func ValidateEvent(env Envelope, cur *Cursor, opts ...func(v *Validation)) (igno
 }
 
 // Validate a chunk of events.
-// Validate will define the validation boundaries and cursor based on the current chunks of events,
+// Validate will define the validation boundaries and cursor based on the current,
 // any validation boundaries set at the option-level will ignored.
 func (stm Stream) Validate(opts ...func(v *Validation)) error {
 	if len(stm) == 0 {
@@ -272,16 +273,13 @@ func (stm Stream) Validate(opts ...func(v *Validation)) error {
 			return err
 		}
 	}
-
 	return nil
 }
 
-// Empty return true if the stream chunk is empty
 func (stm Stream) Empty() bool {
 	return len(stm) == 0
 }
 
-// EventIDs returns the stream chunks events IDs
 func (stm Stream) EventIDs() []string {
 	ids := make([]string, len(stm))
 	for i, ev := range stm {

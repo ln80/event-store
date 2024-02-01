@@ -42,11 +42,15 @@ type ElasticStoreConfig struct {
 
 	// DynamodbStoreOptions presents a set of functional options for
 	// the dynamodb event store implementation.
-	DynamodbStoreOptions []func(*dynamodb.StoreConfig)
+	dynamodbStoreOptions []func(*dynamodb.StoreConfig)
 
 	// EnableTracing is enabled by default. By default it enable X-Ray tracing
 	// at dynamodb event store level.
 	EnableTracing bool
+}
+
+func (esc *ElasticStoreConfig) AddDynamodbStoreOption(opt func(*dynamodb.StoreConfig)) {
+	esc.dynamodbStoreOptions = append(esc.dynamodbStoreOptions, opt)
 }
 
 // NewElasticStore returns a client for the Elastic Event Store,
@@ -61,7 +65,7 @@ func NewElasticStore(dynamodbTable string, opts ...func(*ElasticStoreConfig)) Ev
 		LoadAWSConfig: func() (aws.Config, error) {
 			return config.LoadDefaultConfig(context.Background())
 		},
-		DynamodbStoreOptions: make([]func(*dynamodb.StoreConfig), 0),
+		dynamodbStoreOptions: make([]func(*dynamodb.StoreConfig), 0),
 		EnableTracing:        true,
 	}
 	for _, opt := range opts {
@@ -80,16 +84,16 @@ func NewElasticStore(dynamodbTable string, opts ...func(*ElasticStoreConfig)) Ev
 		cfg.DynamodbClient = dynamodb.NewClient(cc)
 	}
 	if cfg.EnableTracing {
-		cfg.DynamodbStoreOptions = append(cfg.DynamodbStoreOptions,
-			func(sc *dynamodb.StoreConfig) {
-				sc.AppendEventOptions = append(sc.AppendEventOptions, func(*event.AppendConfig) {
-					xray.AppendEventWithTracing()
-				})
-			},
-		)
+		cfg.AddDynamodbStoreOption(func(sc *dynamodb.StoreConfig) {
+			sc.AppendEventOptions = append(sc.AppendEventOptions, xray.AppendEventWithTracing())
+		})
 	}
 
-	return dynamodb.NewEventStore(cfg.DynamodbClient, dynamodbTable, cfg.DynamodbStoreOptions...)
+	cfg.AddDynamodbStoreOption(func(sc *dynamodb.StoreConfig) {
+		sc.RecordSizeLimit = 250 * 1024 // 6KB safety margin
+	})
+
+	return dynamodb.NewEventStore(cfg.DynamodbClient, dynamodbTable, cfg.dynamodbStoreOptions...)
 }
 
 // SetDefaultLogger allows to override the internal default logger used by the library.
@@ -100,5 +104,5 @@ func SetDefaultLogger(log logr.Logger)
 // DiscardLogger returns a mute logger. Pass the mute logger to 'SetDefaultLogger'
 // to disable library internal logging.
 //
-//go:linkname DiscardLogger github.com/ln80/event-store/internal/logger.Discard2
+//go:linkname DiscardLogger github.com/ln80/event-store/internal/logger.Discard
 func DiscardLogger() logr.Logger

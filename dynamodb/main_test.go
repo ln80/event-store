@@ -41,7 +41,7 @@ func awsConfig(endpoint string) (cfg aws.Config, err error) {
 }
 
 func makeRecord(ser event.Serializer, globalID string, envs []event.Envelope) Record {
-	chunk, _, _ := ser.MarshalEventBatch(context.TODO(), envs)
+	chunk, _ := ser.MarshalEventBatch(context.TODO(), envs)
 	t := envs[len(envs)-1].At()
 	id := event.NewStreamID(globalID)
 
@@ -73,10 +73,10 @@ func withTable(t *testing.T, dbsvc AdminAPI, tfn func(table string)) {
 
 func TestMain(m *testing.M) {
 	endpoint := os.Getenv("DYNAMODB_ENDPOINT")
-	// if endpoint == "" {
-	// 	log.Println("dynamodb test endpoint not found")
-	// 	return
-	// }
+	if endpoint == "" {
+		log.Println("dynamodb test endpoint not found")
+		return
+	}
 
 	cfg, err := awsConfig(endpoint)
 	if err != nil {

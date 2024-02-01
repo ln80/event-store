@@ -12,6 +12,7 @@ var (
 	ErrAppendEventsFailed      = errors.New("append events failure")
 	ErrUnsupportedAppendOption = errors.New("unsupported append option")
 	ErrLoadEventFailed         = errors.New("load events failure")
+	ErrEventSizeLimitExceeded  = errors.New("event record size limit exceeded")
 )
 
 // AppendConfig presents a generic definition of write operation options.

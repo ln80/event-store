@@ -2,7 +2,6 @@ package dynamodb
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sort"
 	"sync"
@@ -20,19 +19,21 @@ import (
 	"github.com/ln80/event-store/json"
 )
 
-const (
-	EventSizeLimit = 256000 // 250 KB
-)
-
 var (
 	_ event.Store    = &Store{}
 	_ sourcing.Store = &Store{}
 	_ event.Streamer = &Store{}
 )
 
+// StoreConfig presents the config of dynamodb-based event store implementation.
 type StoreConfig struct {
-	Serializer         event.Serializer
+	// Serializer presents the event serializer. By default, the store uses the JSON event serializer.
+	Serializer event.Serializer
+	// AppendEventOptions presents the default pre-append options applied in every events' Append call.
 	AppendEventOptions []func(*event.AppendConfig)
+	// RecordSizeLimit describes the size limit in bytes of events' appended to the stream.
+	// It's ignored if empty.
+	RecordSizeLimit int
 }
 
 // Store implements event.Store, sourcing.Store, and event.Streamer interfaces
@@ -72,7 +73,7 @@ func (s *baseStore) doAppend(ctx context.Context, id event.StreamID, ver *event.
 		return
 	}
 	defer func() {
-		if err != nil && !errors.Is(err, event.ErrAppendEventsConflict) {
+		if !event_errors.ErrIs(err, nil, event.ErrAppendEventsConflict) {
 			err = event_errors.Err(event.ErrAppendEventsFailed, id.String(), err)
 			return
 		}
@@ -102,13 +103,14 @@ func (s *baseStore) doAppend(ctx context.Context, id event.StreamID, ver *event.
 		}
 	}
 
-	b, n, err := s.cfg.Serializer.MarshalEventBatch(ctx, events)
+	b, err := s.cfg.Serializer.MarshalEventBatch(ctx, events)
 	if err != nil {
 		return
 	}
-	for _, size := range n {
-		if size > EventSizeLimit {
-			err = errors.New("event size limit exceeded")
+
+	if limit := s.cfg.RecordSizeLimit; limit > 0 {
+		if size := len(b); size > limit {
+			err = fmt.Errorf("%w: record size %d", event.ErrEventSizeLimitExceeded, size)
 			return
 		}
 	}
@@ -201,7 +203,7 @@ func (s *baseStore) doLoad(ctx context.Context, id event.StreamID, from, to stri
 
 	log := logger.FromContext(ctx).WithName("base")
 
-	cc := &ConsumedCapacity{}
+	cc := &consumedCapacity{}
 	defer func() {
 		if !cc.IsZero() {
 			log.V(1).Info("Load events consumed capacity", "capacity", cc)
@@ -434,20 +436,16 @@ func (s *sourcingStore) AppendToStream(ctx context.Context, stm sourcing.Stream,
 
 	ver := stm.Version()
 
-	// ignore "check previous record exists" if the chunk is supposed to be the first in stream.
-	if recordVer := ver.Trunc(); recordVer.After(event.VersionMin) {
-		// Note that "check previous record" + "save new chunk" operations are not transactional,
-		// a dirty read may occur if table is somehow corrupted/updated, which is unlikely the case.
-		if err = s.previousRecordExists(ctx, id, recordVer); err != nil {
-			return
-		}
+	// Note that "check previous record exists" and "append new record" operations are not transactional,
+	// a dirty read may occur if table is corrupted, e.g, the previous record is deleted just after the read.
+	// This is unlikely to happen and the current solution is much more cost-effective comparing to
+	// using dynamodb transaction with Check operation.
+	if err = s.previousRecordExists(ctx, id, ver.Trunc()); err != nil {
+		return
 	}
-
 	keysFn := func() (string, string) {
 		return recordHashKey(id), recordRangeKeyWithVersion(stm.ID(), ver)
 	}
-	// doAppend still perform another check to ensure the chunk version does not already exist.
-	// Although it does not guarantee that the stream sequence is consecutive.
 	err = s.doAppend(ctx, id, &ver, stm.Unwrap(), keysFn, optFns)
 	return
 }
@@ -457,8 +455,6 @@ func (s *sourcingStore) LoadStream(ctx context.Context, id event.StreamID, vrang
 	log := logger.WithStream(logger.FromContext(ctx), id.String()).WithName("dynamodb/sourcing")
 	ctx = logger.NewContext(ctx, log)
 
-	// update the stream in-memory checkpoint to avoid extra db checks in the case of
-	// Appends and Loads operations are regularly performed from the same instance/process.
 	defer func() {
 		if err == nil {
 			s.checkpoint.check(stm.ID(), stm.Version())
@@ -501,14 +497,17 @@ func (s *sourcingStore) LoadStream(ctx context.Context, id event.StreamID, vrang
 }
 
 // previousRecordExists ensures the given record is in a consecutive sequence in the given stream.
-// only applied for version-based streams
 func (s *sourcingStore) previousRecordExists(ctx context.Context, id event.StreamID, recordCur event.Version) error {
+	if recordCur.Before(event.VersionMin) || recordCur.Equal(event.VersionMin) {
+		return nil
+	}
+
 	log := logger.FromContext(ctx)
 
 	recordPrev := recordCur.Decr()
 	latest, found := s.checkpoint.latest(id)
 	if !found || recordPrev.After(latest) {
-		cc := &ConsumedCapacity{}
+		cc := &consumedCapacity{}
 		defer func() {
 			if !cc.IsZero() {
 				log.V(1).Info("Refresh in-memory checkpoint consumed capacity", "capacity", cc)
@@ -553,11 +552,14 @@ type streamerStore struct {
 	*baseStore
 }
 
+// Replay replays event from the global stream according to the query filters.
+//
+// Note that the global stream is eventually consistent.
 func (s *streamerStore) Replay(ctx context.Context, id event.StreamID, q event.StreamerQuery, h event.StreamerHandler) (err error) {
 	log := logger.WithStream(logger.FromContext(ctx), id.String()).WithName("dynamodb/streamer")
 	ctx = logger.NewContext(ctx, log)
 
-	// only global streams are supported for replay
+	// only global streams are supported for replay; truncate sub-stream parts.
 	if !id.Global() {
 		id = event.NewStreamID(id.GlobalID())
 	}
@@ -569,10 +571,8 @@ func (s *streamerStore) Replay(ctx context.Context, id event.StreamID, q event.S
 	}()
 
 	q.Build()
-	from := q.From.Trunc()
-	to := q.To
 
-	cc := &ConsumedCapacity{}
+	cc := &consumedCapacity{}
 	defer func() {
 		if !cc.IsZero() {
 			log.V(1).Info("Replay events consumed capacity", "capacity", cc, "query", q)
@@ -592,7 +592,7 @@ func (s *streamerStore) Replay(ctx context.Context, id event.StreamID, q event.S
 				And(
 					expression.
 						Key(LocalIndexRangeKey).
-						Between(expression.Value(from.String()), expression.Value(to.String()))),
+						Between(expression.Value(q.From.Trunc().String()), expression.Value(q.To.String()))),
 		).Build()
 	p := dynamodb.NewQueryPaginator(s.api, &dynamodb.QueryInput{
 		TableName:                 aws.String(s.table),
@@ -612,7 +612,6 @@ func (s *streamerStore) Replay(ctx context.Context, id event.StreamID, q event.S
 		ReturnConsumedCapacity: types.ReturnConsumedCapacityIndexes,
 	})
 
-	// recordCount is used to avoid processing unnecessary records found in later pages.
 	recordCount := 0
 PAGE_LOOP:
 	for p.HasMorePages() {

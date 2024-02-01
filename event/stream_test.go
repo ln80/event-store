@@ -14,14 +14,14 @@ import (
 func TestStream_ID(t *testing.T) {
 	streamID := NewStreamID("gstreamID", "p1", "p2", "p2")
 
-	if want, val := strings.Join([]string{"gstreamID", "p1", "p2", "p2"}, StreamIDPartsDelimiter), streamID.String(); want != val {
-		t.Fatalf("expect %s, %s be equals", want, val)
+	if want, got := strings.Join([]string{"gstreamID", "p1", "p2", "p2"}, StreamIDPartsDelimiter), streamID.String(); want != got {
+		t.Fatalf("expect %s, %s be equals", want, got)
 	}
-	if want, val := "gstreamID", streamID.GlobalID(); want != val {
-		t.Fatalf("expect %s, %s be equals", want, val)
+	if want, got := "gstreamID", streamID.GlobalID(); want != got {
+		t.Fatalf("expect %s, %s be equals", want, got)
 	}
-	if want, val := []string{"p1", "p2", "p2"}, streamID.Parts(); !reflect.DeepEqual(want, val) {
-		t.Fatalf("expect %v, %v be equals", want, val)
+	if want, got := []string{"p1", "p2", "p2"}, streamID.Parts(); !reflect.DeepEqual(want, got) {
+		t.Fatalf("expect %v, %v be equals", want, got)
 	}
 	if ok := streamID.Global(); ok {
 		t.Fatal("expect stream is global be false, got true")
@@ -35,8 +35,8 @@ func TestStream_ID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expect err be nil, got %v", err)
 	}
-	if want, val := "gstreamID", streamID.GlobalID(); want != val {
-		t.Fatalf("expect %s, %s be equals", want, val)
+	if want, got := "gstreamID", streamID.GlobalID(); want != got {
+		t.Fatalf("expect %s, %s be equals", want, got)
 	}
 	if ok := streamID.Global(); ok {
 		t.Fatal("expect stream is global be false, got true")
@@ -45,8 +45,8 @@ func TestStream_ID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expect err be nil, got %v", err)
 	}
-	if want, val := "gstreamID", streamID.GlobalID(); want != val {
-		t.Fatalf("expect %s, %s be equals", want, val)
+	if want, got := "gstreamID", streamID.GlobalID(); want != got {
+		t.Fatalf("expect %s, %s be equals", want, got)
 	}
 	if ok := streamID.Global(); !ok {
 		t.Fatal("expect stream is global, got false")
@@ -171,8 +171,8 @@ func TestStream_Basic(t *testing.T) {
 		t.Fatalf("expect len %d, %d  be equals", want, got)
 	}
 	for i, evt := range stm.Events() {
-		if want, val := events[i], evt; want != val {
-			t.Fatalf("expect %v, %v be equals", want, val)
+		if want, got := events[i], evt; want != got {
+			t.Fatalf("expect %v, %v be equals", want, got)
 		}
 	}
 }

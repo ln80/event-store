@@ -50,8 +50,7 @@ func recordRangeKeyWithVersion(stmID event.StreamID, ver event.Version) string {
 }
 
 // UnpackRecord does unmarshal events contained in the record and set their respective global stream sequence.
-// It fails if the record is not indexed.
-// It panics if event envelopes do not support 'SetGlobalVersion' interface.
+// It fails if the record is not indexed, and it panics if an event envelope does not implement event.GlobalVersionSetter interface.
 func UnpackRecord(ctx context.Context, r Record, serializer event.Serializer) ([]event.Envelope, error) {
 	if len(r.Events) == 0 {
 		return nil, nil

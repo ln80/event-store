@@ -81,7 +81,7 @@ func (p *Publisher) publish(ctx context.Context, events []event.Envelope) error 
 	// - batch message size limit is the same as the size a single message using Publish method
 	// - The retry logic of partially failed batch might corrupt the publishing order.
 	for _, evt := range events {
-		msg, _, err := p.Serializer.MarshalEvent(ctx, evt)
+		msg, err := p.Serializer.MarshalEvent(ctx, evt)
 		if err != nil {
 			return err
 		}
@@ -122,7 +122,7 @@ func (p *Publisher) publishRecord(ctx context.Context, events []event.Envelope) 
 	log := logger.FromContext(ctx).WithName("sns")
 	log.V(1).Info("Do SNS Publish BATCH", "count", len(events))
 
-	record, _, err := p.Serializer.MarshalEventBatch(ctx, events)
+	record, err := p.Serializer.MarshalEventBatch(ctx, events)
 	if err != nil {
 		return err
 	}

@@ -22,7 +22,7 @@ var sessionContextKey ContextKey = "dynamodbSessionKey"
 func NewSession(api ClientAPI) *Session {
 	return &Session{
 		api: api,
-		cc:  &ConsumedCapacity{},
+		cc:  &consumedCapacity{},
 	}
 }
 
@@ -41,11 +41,11 @@ func ContextWithSession(ctx context.Context, s *Session) context.Context {
 type Session struct {
 	api ClientAPI
 	ops []txOp
-	cc  *ConsumedCapacity
+	cc  *consumedCapacity
 }
 
 // ConsumedCapacity implements Session.
-func (s *Session) ConsumedCapacity() *ConsumedCapacity {
+func (s *Session) ConsumedCapacity() *consumedCapacity {
 	return s.cc
 }
 
@@ -70,7 +70,6 @@ func (s *Session) addConsumedCapacity(out any) {
 	if s.cc == nil {
 		return
 	}
-
 	if o, ok := out.(*dynamodb.TransactWriteItemsOutput); ok && o != nil {
 		for _, cc := range o.ConsumedCapacity {
 			addConsumedCapacity(s.cc, &cc)

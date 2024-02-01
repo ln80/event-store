@@ -13,7 +13,7 @@ func TestSerializer(t *testing.T, ctx context.Context, ser event.Serializer) {
 
 	t.Run("marshal_unmarshal single", func(t *testing.T) {
 		evt := event.Wrap(ctx, stmID, GenEvents(1))[0]
-		b, _, err := ser.MarshalEvent(ctx, evt)
+		b, err := ser.MarshalEvent(ctx, evt)
 		if err != nil {
 			t.Fatalf("expect err be nil, got %v", err)
 		}
@@ -28,7 +28,7 @@ func TestSerializer(t *testing.T, ctx context.Context, ser event.Serializer) {
 		}
 
 		// make sure we do not lose data even if we marshal x2
-		b2, _, err := ser.MarshalEvent(ctx, resEvt)
+		b2, err := ser.MarshalEvent(ctx, resEvt)
 		if err != nil {
 			t.Fatalf("expect err be nil, got %v", err)
 		}
@@ -39,7 +39,7 @@ func TestSerializer(t *testing.T, ctx context.Context, ser event.Serializer) {
 
 	t.Run("marshal_unmarshal batch", func(t *testing.T) {
 		evts := event.Wrap(ctx, stmID, GenEvents(20))
-		b, _, err := ser.MarshalEventBatch(ctx, evts)
+		b, err := ser.MarshalEventBatch(ctx, evts)
 		if err != nil {
 			t.Fatalf("expect err be nil, got %v", err)
 		}
@@ -60,7 +60,7 @@ func TestSerializer(t *testing.T, ctx context.Context, ser event.Serializer) {
 		}
 
 		// make sure we do not lose data even if we marshal x2
-		b2, _, err := ser.MarshalEventBatch(ctx, rEvts)
+		b2, err := ser.MarshalEventBatch(ctx, rEvts)
 		if err != nil {
 			t.Fatalf("expect err be nil, got %v", err)
 		}

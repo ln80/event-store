@@ -6,39 +6,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
-// func aggregateCapacity(c1 types.ConsumedCapacity, cs ...types.ConsumedCapacity) types.ConsumedCapacity {
-// 	if len(cs) == 0 {
-// 		return c1
-// 	}
-
-// 	for _, c := range cs {
-// 		if c1.CapacityUnits != nil && c.CapacityUnits != nil {
-// 			*c1.CapacityUnits += *c.CapacityUnits
-// 		}
-// 		if c1.WriteCapacityUnits != nil && c.WriteCapacityUnits != nil {
-// 			*c1.WriteCapacityUnits += *c.WriteCapacityUnits
-// 		}
-// 		if c1.ReadCapacityUnits != nil && c.ReadCapacityUnits != nil {
-// 			*c1.ReadCapacityUnits += *c.ReadCapacityUnits
-// 		}
-
-// 		if c1.Table != nil && c.Table != nil {
-// 			if c1.Table.CapacityUnits != nil && c.Table.CapacityUnits != nil {
-// 				*c1.CapacityUnits += *c.CapacityUnits
-// 			}
-// 			if c1.Table.WriteCapacityUnits != nil && c.Table.WriteCapacityUnits != nil {
-// 				*c1.Table.WriteCapacityUnits += *c.Table.WriteCapacityUnits
-// 			}
-// 			if c1.Table.ReadCapacityUnits != nil && c.Table.ReadCapacityUnits != nil {
-// 				*c1.Table.ReadCapacityUnits += *c.Table.ReadCapacityUnits
-// 			}
-// 		}
-// 	}
-
-// 	return c1
-// }
-
-type ConsumedCapacity struct {
+type consumedCapacity struct {
 	Total      float64
 	Read       float64
 	Write      float64
@@ -54,11 +22,11 @@ type ConsumedCapacity struct {
 	TableName  string
 }
 
-func (cc *ConsumedCapacity) IsZero() bool {
-	return cc == nil || reflect.DeepEqual(*cc, ConsumedCapacity{})
+func (cc *consumedCapacity) IsZero() bool {
+	return cc == nil || reflect.DeepEqual(*cc, consumedCapacity{})
 }
 
-func addConsumedCapacity(cc *ConsumedCapacity, raw *types.ConsumedCapacity) {
+func addConsumedCapacity(cc *consumedCapacity, raw *types.ConsumedCapacity) {
 	if cc == nil || raw == nil {
 		return
 	}

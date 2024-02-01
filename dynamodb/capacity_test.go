@@ -10,18 +10,18 @@ import (
 
 func TestConsumedCapacity(t *testing.T) {
 	t.Run("zero", func(t *testing.T) {
-		cc := &ConsumedCapacity{}
+		cc := &consumedCapacity{}
 		if !cc.IsZero() {
 			t.Fatal("expect true, got false")
 		}
-		cc = &ConsumedCapacity{GSI: map[string]float64{"GSI1": 20.4}}
+		cc = &consumedCapacity{GSI: map[string]float64{"GSI1": 20.4}}
 		if cc.IsZero() {
 			t.Fatal("expect true, got false")
 		}
 	})
 
 	t.Run("add", func(t *testing.T) {
-		cc1 := ConsumedCapacity{
+		cc1 := consumedCapacity{
 			Total:      10,
 			GSI:        map[string]float64{"GSI1": 10},
 			GSIRead:    map[string]float64{},
@@ -34,7 +34,7 @@ func TestConsumedCapacity(t *testing.T) {
 			TableWrite: 0,
 		}
 		copy, _ := copystructure.Copy(cc1)
-		old := copy.(ConsumedCapacity)
+		old := copy.(consumedCapacity)
 
 		raw := &types.ConsumedCapacity{
 			CapacityUnits: aws.Float64(5),

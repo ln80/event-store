@@ -15,7 +15,6 @@ import (
 	"github.com/ln80/event-store/event"
 	event_errors "github.com/ln80/event-store/event/errors"
 	"github.com/ln80/event-store/event/sourcing"
-	"github.com/ln80/event-store/internal/logger"
 	"github.com/ln80/event-store/internal/testutil"
 )
 
@@ -92,9 +91,6 @@ func TestEventStore_WithTx(t *testing.T) {
 		return input
 	}
 
-	_ = addItem
-
-	logger.Default().Info(" far boo")
 	withTable(t, dbsvc, func(table string) {
 		store := NewEventStore(dbsvc, table)
 
@@ -103,7 +99,11 @@ func TestEventStore_WithTx(t *testing.T) {
 			stm := sourcing.Wrap(ctx, streamID, event.VersionZero, testutil.GenEvents(5))
 			err := store.AppendToStream(ctx, stm, func(opt *event.AppendConfig) {
 				opt.AddToTx = func(ctx context.Context) (items []any) {
-					return []any{addItem(table, recordHashKey(streamID), recordRangeKeyWithVersion(streamID, event.VersionZero.Incr()))}
+					item := addItem(table,
+						recordHashKey(streamID),
+						recordRangeKeyWithVersion(streamID, event.VersionZero.Incr()),
+					)
+					return []any{item}
 				}
 			})
 			if want, got := event.ErrAppendEventsConflict, err; !errors.Is(got, want) {
