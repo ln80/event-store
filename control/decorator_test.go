@@ -13,7 +13,7 @@ import (
 	"github.com/ln80/event-store/memory"
 )
 
-func TestFeatureTogglesDecorator(t *testing.T) {
+func TestDecorator(t *testing.T) {
 	testutil.RegisterEvent("")
 
 	ctx := context.Background()

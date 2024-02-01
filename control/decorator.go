@@ -9,18 +9,12 @@ import (
 	"github.com/ln80/event-store/event/sourcing"
 )
 
-type eventStore interface {
-	event.Store
-	event.Streamer
-	sourcing.Store
-}
-
 type Decorator struct {
 	feature FeatureToggler
 	es.EventStore
 }
 
-func NewDecorator(store eventStore, feature FeatureToggler) *Decorator {
+func NewDecorator(store es.EventStore, feature FeatureToggler) *Decorator {
 	return &Decorator{
 		feature:    feature,
 		EventStore: store,
@@ -52,16 +46,3 @@ func (d *Decorator) AppendToStream(ctx context.Context, chunk sourcing.Stream, o
 
 	return d.EventStore.AppendToStream(ctx, chunk, optFns...)
 }
-
-// func (d *Decorator) Load(ctx context.Context, id event.StreamID, trange ...time.Time) ([]event.Envelope, error) {
-// 	return d.EventStore.Load(ctx, id, trange...)
-// }
-
-// func (d *Decorator) LoadStream(ctx context.Context, id event.StreamID, vrange ...event.Version) (*sourcing.Stream, error) {
-// 	return d.EventStore.LoadStream(ctx, id, vrange...)
-// }
-
-// // Replay implements es.EventStore.
-// func (d *Decorator) Replay(ctx context.Context, streamID event.StreamID, q event.StreamerQuery, h event.StreamerHandler) error {
-// 	return d.EventStore.Replay(ctx, streamID, q, h)
-// }

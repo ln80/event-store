@@ -46,7 +46,7 @@ elastic/deploy:
 		--no-fail-on-empty-changeset \
 		--stack-name $(TEST_STACK_NAME) \
 		--config-env $(TEST_ENV) \
-		--capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND \
+		--capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM \
 		--region $(TEST_REGION) \
 		--s3-bucket ln80-sam-pkgs \
 		--parameter-overrides $(TEST_PARAMS)
@@ -62,7 +62,7 @@ elastic/integ-test/deploy:
 		--no-fail-on-empty-changeset \
 		--stack-name $(TEST_STACK_NAME) \
 		--config-env $(TEST_ENV) \
-		--capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND \
+		--capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM \
 		--region $(TEST_REGION) \
 		--resolve-s3 \
 

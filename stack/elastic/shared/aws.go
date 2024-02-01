@@ -1,4 +1,4 @@
-package utils
+package shared
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/appconfigdata"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/glue"
 	"github.com/aws/aws-sdk-go-v2/service/sns"
@@ -23,6 +24,10 @@ func InitSNSClient(cfg aws.Config) *sns.Client {
 
 func InitGlueClient(cfg aws.Config) *glue.Client {
 	return glue.NewFromConfig(cfg)
+}
+
+func InitAppConfigClient(cfg aws.Config) *appconfigdata.Client {
+	return appconfigdata.NewFromConfig(cfg)
 }
 
 // HackCtx to workaround https://github.com/aws/aws-sam-cli/issues/2510

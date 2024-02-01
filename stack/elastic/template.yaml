@@ -44,13 +44,7 @@ Parameters:
     Type: Number
     Default: 0
   
-  AlarmSNSTopicArn:
-    Type: String
-    Default: ""
-    Description: |
-      AlarmSNSTopicArn receives alarms when indexing and forwarding lambdas are facing issues.
-
-  PublishSNSTopicArn:
+  ForwardSNSTopicArn:
     Type: String
     Default: ""
     Description: |
@@ -103,22 +97,86 @@ Parameters:
     Type: Number
     Default: 1
     Description: |
-      VerbosityLevel number define the max log verbosity level, e.g, '0' for Info only, '1' to include debug
+      VerbosityLevel number define the max log verbosity level, e.g, '0' for Info only, '1' to include debug, or '-1' to disable cloudwatch logging.
+
+  FeatureTogglesConfigurationPath:
+    Type: String
+    Default: ""
+
+  IndexerDeadLetterTopicArn: 
+    Type: String
+    Default: ""
+
+  ForwarderDeadLetterTopicArn: 
+    Type: String
+    Default: ""
+
+  EmergencyRedirectFifoTopicArn: 
+    Type: String
+    Default: ""
+    Description: |
+      A SNS Fifo Topic ARN used by indexer and forwarder to redirect events to
+      when indexing or forwarding are disabled by feature toggles.
+  
+Rules:
+  ValidateAvroGlueSchemaRegistryName:
+    RuleCondition: !Equals 
+      - !Ref EncodingFormat
+      - "AVRO"
+    Assertions:
+      - Assert: !Not 
+          - !Equals 
+            - !Ref AvroGlueSchemaRegistryName
+            - ''
+        AssertDescription: |
+          AVRO Glue Schema Registry name is mandatory if Encoding format is "AVRO".
+  
+  ValidateEmergencyRedirectTopic:
+    RuleCondition: !Not
+        - !Equals 
+          - !Ref FeatureTogglesConfigurationPath
+          - ""
+    Assertions:
+      - Assert: !Not 
+        - !Equals 
+          - !Ref EmergencyRedirectFifoTopicArn
+          - ""
+        AssertDescription: |
+          Emergency Redirect Fifo Topic is mandatory if Feature toggles configuration path is provided.
 
 Conditions:
-  MustEnableAlarm: !Not
-    - !Equals
-      - !Ref AlarmSNSTopicArn
-      - ''
+  MustEnableFeatureToggles:
+    !Not
+      - !Equals
+        - !Ref FeatureTogglesConfigurationPath
+        - ''
+
+  MustDisableCloudWatchLogging:
+    !Equals
+      - !Ref VerbosityLevel
+      - -1
+  
+  MustUseIndexerDeadLetter:
+    !Not
+      - !Equals
+        - !Ref IndexerDeadLetterTopicArn
+        - ''
+  MustUseForwarderDeadLetter:
+    !Not
+      - !Equals
+        - !Ref ForwarderDeadLetterTopicArn
+        - ''
   MustForward:
     !Not
       - !Equals
         - ''
-        - !Ref PublishSNSTopicArn
+        - !Ref ForwardSNSTopicArn
+  
   MustRetainResource:
     !Equals
       - !Ref RetainResource
       - "true"
+
   MustUseAvro:
     !Equals
       - !Ref EncodingFormat
@@ -134,11 +192,14 @@ Globals:
     ReservedConcurrentExecutions: 10
     Environment:
       Variables:
+        DYNAMODB_TABLE: !Ref EventTable
         VERBOSITY_LEVEL: !Ref VerbosityLevel
         ENCODING_FORMAT: !Sub 
                 - "{{resolve:ssm:${ParameterName}}}"
                 - { ParameterName: !Ref EncodingFormatParameter }
         AVRO_GLUE_SCHEMA_REGISTRY: !Ref AvroGlueSchemaRegistryName
+        FEATURE_TOGGLES_CONFIG_PATH: !Ref FeatureTogglesConfigurationPath
+        EMERGENCY_REDIRECT_FIFO_TOPIC:  !Ref EmergencyRedirectFifoTopicArn
 
 Resources:
   EncodingFormatParameter:
@@ -147,7 +208,7 @@ Resources:
       Name: !Sub /${Name}/event-encoding-format
       Type: String
       Value: !Ref EncodingFormat
-      Description: Events encoding format. It should not be updated after stack creation
+      Description: Events encoding format. It should not be updated after stack creation.
       AllowedPattern: "^[a-zA-Z]{1,10}$"
         
   EventTable:
@@ -201,22 +262,6 @@ Resources:
         StreamSpecification:
           StreamViewType: NEW_IMAGE
 
-  IndexerDeadLetterQueue:
-    Type: AWS::SQS::Queue
-    Properties:
-        QueueName: !Sub ${Name}-indexer-dlq
-        MessageRetentionPeriod: 1209600 # 14 days
-        ReceiveMessageWaitTimeSeconds: 20
-        VisibilityTimeout: 180
-
-  ForwarderDeadLetterQueue:
-    Type: AWS::SQS::Queue
-    Properties:
-        QueueName: !Sub ${Name}-forwarder-dlq
-        MessageRetentionPeriod: 1209600 # 14 days
-        ReceiveMessageWaitTimeSeconds: 20
-        VisibilityTimeout: 180
-
   # LAMBDA FUNCTIONS:
   
   IndexerFunction:
@@ -232,14 +277,16 @@ Resources:
           Properties:
             Stream: !GetAtt EventTable.StreamArn
             StartingPosition: TRIM_HORIZON
-            BatchSize: 1 # much safer
+            BatchSize: 1
             BisectBatchOnFunctionError: false
             ParallelizationFactor: 1
             MaximumRetryAttempts: 1000
-            DestinationConfig:
-              OnFailure:
-                Type: SQS
-                Destination: !GetAtt IndexerDeadLetterQueue.Arn
+            DestinationConfig: !If 
+                    - MustUseIndexerDeadLetter
+                    - OnFailure:
+                        Type: SNS
+                        Destination: !Ref IndexerDeadLetterTopicArn
+                    - !Ref AWS::NoValue
             FilterCriteria:
               Filters:
                 - Pattern: '{"eventName": ["INSERT"], "dynamodb": { "Keys" : {"_pk": {"S": [{"anything-but": [ "internal" ]}]}}}}'
@@ -247,31 +294,27 @@ Resources:
         - AWSLambdaDynamoDBExecutionRole
         - DynamoDBCrudPolicy:
             TableName: !Ref EventTable
-        - SQSSendMessagePolicy:
-            QueueName: !GetAtt IndexerDeadLetterQueue.QueueName
-      Environment:
-          Variables:
-            DYNAMODB_TABLE: !Ref EventTable
-
-  IndexerCloudWatchAlarm:
-    Type: 'AWS::CloudWatch::Alarm'
-    Condition: MustEnableAlarm
-    Properties:
-      ActionsEnabled: true
-      AlarmDescription: !Sub 'Indexing a global stream is facing issues'
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      Dimensions:
-        - Name: FunctionName
-          Value: !Sub ${Name}-Indexer
-      EvaluationPeriods: 1
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Period: 30
-      Statistic: Sum
-      Threshold: 1
-      AlarmActions:
-        - !Ref AlarmSNSTopicArn
-
+        - !If
+            - MustDisableCloudWatchLogging
+            - Version: '2012-10-17'
+              Statement:
+                - Effect: Deny
+                  Action:
+                    - 'logs:CreateLogGroup'
+                    - 'logs:CreateLogStream'
+                    - 'logs:PutLogEvents'
+                  Resource: arn:aws:logs:*:*:*
+            - !Ref AWS::NoValue
+        - !If 
+            - MustUseIndexerDeadLetter
+            - Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - 'sns:Publish'
+                  Resource: !Ref IndexerDeadLetterTopicArn
+            - !Ref AWS::NoValue
+       
   ForwarderFunction:
       Type: AWS::Serverless::Function
       Condition: MustForward
@@ -292,51 +335,85 @@ Resources:
               # MaximumRecordAgeInSeconds: -1
               # MaximumRetryAttempts: -1
               MaximumRetryAttempts: 1000
-              DestinationConfig:
-                OnFailure:
-                  Destination: !GetAtt ForwarderDeadLetterQueue.Arn
+              DestinationConfig: !If 
+                    - MustUseForwarderDeadLetter
+                    - OnFailure:
+                        Type: SNS
+                        Destination: !Ref ForwarderDeadLetterTopicArn
+                    - !Ref AWS::NoValue
               FilterCriteria:
                 Filters:
                   - Pattern: '{"eventName": ["MODIFY"], "dynamodb": { "Keys" : {"_pk": {"S": [{"anything-but": [ "internal" ]}]}}}}'
         Policies:
           - AWSLambdaDynamoDBExecutionRole
-          - SQSSendMessagePolicy:
-              QueueName: !GetAtt ForwarderDeadLetterQueue.QueueName
           - Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action:
                   - 'sns:Publish'
-                Resource: !Ref PublishSNSTopicArn
+                Resource: !Ref ForwardSNSTopicArn
+          - !If
+            - MustDisableCloudWatchLogging
+            - Version: '2012-10-17'
+              Statement:
+                - Effect: Deny
+                  Action:
+                    - 'logs:CreateLogGroup'
+                    - 'logs:CreateLogStream'
+                    - 'logs:PutLogEvents'
+                  Resource: arn:aws:logs:*:*:*
+            - !Ref AWS::NoValue
+          - !If
+            - MustUseForwarderDeadLetter
+            - Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - 'sns:Publish'
+                  Resource: !Ref ForwarderDeadLetterTopicArn
+            - !Ref AWS::NoValue
           - !If
             - MustUseAvro
             - AWSGlueSchemaRegistryReadonlyAccess
             - !Ref AWS::NoValue
         Environment:
             Variables:
-              SNS_TOPIC: !Ref PublishSNSTopicArn
+              SNS_TOPIC: !Ref ForwardSNSTopicArn
               BATCH_RECORD_ENABLED: !Ref BatchRecordEnabled
 
-  ForwarderCloudWatchAlarm:
-    Type: 'AWS::CloudWatch::Alarm'
-    Condition: MustEnableAlarm
+  FeatureTogglesPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Condition: MustEnableFeatureToggles
     Properties:
-      ActionsEnabled: true
-      AlarmDescription: !Sub 'Forwarding events to SNS topic is facing issues'
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      Dimensions:
-        - Name: FunctionName
-          Value: !Sub ${Name}-Forwarder
-      EvaluationPeriods: 1
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Period: 30
-      Statistic: Sum
-      Threshold: 1
-      AlarmActions:
-        - !Ref AlarmSNSTopicArn
+      Description: Grant Access to Feature Toggles Configuration and Emergency Redirect SNS TOPIC
+      ManagedPolicyName: !Sub ${Name}-FeatureTogglesPolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+                    - appconfig:GetLatestConfiguration
+                    - appconfig:StartConfigurationSession
+            Resource: !Sub 
+                    - 'arn:aws:appconfig:${AWS::Region}:${AWS::AccountId}:${ConfigPath}'
+                    - { ConfigPath: !Ref FeatureTogglesConfigurationPath }
+          - Effect: Allow
+            Action:
+                    - 'sns:Publish'
+            Resource: !Ref EmergencyRedirectFifoTopicArn
+      Roles: 
+        - !Ref IndexerFunctionRole
+        - !Ref ForwarderFunctionRole
 
 Outputs:
   EventTable:
     Description: "Dynamodb Event Table"
     Value: !Ref EventTable
+
+  IndexerFunctionName:
+    Description: "Indexer Lambda function"
+    Value: !Ref IndexerFunction
+
+  ForwardFunctionName:
+    Description: "Forwarder Lambda function"
+    Value: !Ref ForwarderFunction

@@ -62,10 +62,14 @@ Resources:
       Location: ./template.yaml
       Parameters:
         Name: !Sub ${AWS::StackName}-event-store
-        PublishSNSTopicArn: !Ref ConsumerTopic
+        ForwardSNSTopicArn: !Ref ConsumerTopic
         EncodingFormat: "AVRO"
         AvroGlueSchemaRegistryName: !Sub ${AWS::StackName}-event-schema-registry
         Tracing: Active
+        # FeatureTogglesConfigurationPath: application/ory5sav/environment/aqgjkm1/configuration/mivqe3u
+        # ForwarderDeadLetterTopicArn: ""
+        # IndexerDeadLetterTopicArn: ""
+        # EmergencyRedirectFifoTopicArn: !Ref ConsumerTopic
 
 Outputs:
   ConsumerQueueUrl:

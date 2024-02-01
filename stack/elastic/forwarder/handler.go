@@ -7,20 +7,20 @@ import (
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/aws/aws-xray-sdk-go/xray"
+	"github.com/ln80/event-store/control"
 	"github.com/ln80/event-store/dynamodb"
 	"github.com/ln80/event-store/event"
 	"github.com/ln80/event-store/internal/logger"
-	"github.com/ln80/event-store/stack/elastic/utils"
+	"github.com/ln80/event-store/stack/elastic/shared"
 )
 
 type handler func(ctx context.Context, event events.DynamoDBEvent) error
 
-func makeHandler(pub event.Publisher, ser event.Serializer) handler {
+func makeHandler(pub event.Publisher, ser event.Serializer, redirect shared.EmergencyRedirectFunc) handler {
 	return func(ctx context.Context, event events.DynamoDBEvent) error {
-		ctx = utils.HackCtx(ctx)
+		ctx = shared.HackCtx(ctx)
 		for _, ev := range event.Records {
-			if err := handleRecord(ctx, pub, ser, ev); err != nil {
+			if err := handleRecord(ctx, pub, ser, redirect, ev); err != nil {
 				return err
 			}
 		}
@@ -28,28 +28,26 @@ func makeHandler(pub event.Publisher, ser event.Serializer) handler {
 	}
 }
 
-func handleRecord(ctx context.Context, pub event.Publisher, ser event.Serializer, ev events.DynamoDBEventRecord) (err error) {
-	if utils.RecordHashKey(ev.Change.Keys) == "internal" {
+func handleRecord(ctx context.Context, pub event.Publisher, ser event.Serializer, redirect shared.EmergencyRedirectFunc, ev events.DynamoDBEventRecord) (err error) {
+	if shared.RecordHashKey(ev.Change.Keys) == "internal" {
 		return
 	}
-	raw := ev.Change.NewImage
+	ctx, close := shared.WithRecordContext(ctx, ev)
+	defer close(err)
 
-	log := logger.WithStream(logger.Default(), raw[dynamodb.GIDAttribute].String()).
-		WithValues("record", utils.RecordKeys(ev.Change.Keys))
-	if t, ok := raw[dynamodb.TraceIDAttribute]; ok {
-		var (
-			seg *xray.Segment
-		)
-		ctx, seg = utils.WithTracing(ctx, t.String(), "Forwarder",
-			"gstmID", raw[dynamodb.GIDAttribute].String(),
-			"gver", raw[dynamodb.GVerAttribute].String(),
-		)
-		if seg != nil {
-			log = logger.WithTrace(log, seg.TraceID)
-			defer seg.Close(err)
+	log := logger.FromContext(ctx)
+
+	var redirected bool
+	if redirect != nil {
+		redirected, err = redirect(ctx, ev, control.FORWARD)
+		if err != nil {
+			return
+		}
+		if redirected {
+			log.Info("event was redirected to emergency destination", "action", control.FORWARD)
+			return
 		}
 	}
-	ctx = logger.NewContext(ctx, log)
 
 	switch ev.EventName {
 	case "MODIFY":
@@ -60,7 +58,7 @@ func handleRecord(ctx context.Context, pub event.Publisher, ser event.Serializer
 			},
 		}
 		var attrMap map[string]types.AttributeValue
-		attrMap, err = utils.FromDynamoDBEventAVMap(ev.Change.NewImage)
+		attrMap, err = shared.FromDynamoDBEventAVMap(ev.Change.NewImage)
 		if err != nil {
 			return
 		}
