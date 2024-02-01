@@ -25,7 +25,7 @@ func TestEventLoggingStore(t *testing.T, ctx context.Context, store event.Store)
 
 		// test append chunk twice
 		err := store.Append(ctx, streamID, envs)
-		if err == nil || !errors.Is(err, event.ErrAppendEventsConflict) {
+		if !errors.Is(err, event.ErrAppendEventsConflict) {
 			t.Fatalf("expect conflict error to occur, got: %v", err)
 		}
 

@@ -28,7 +28,7 @@ func TestEventSourcingStore(t *testing.T, ctx context.Context, store sourcing.St
 
 		// append chunk twice
 		err := store.AppendToStream(ctx, stm)
-		if err == nil || !errors.Is(err, event.ErrAppendEventsConflict) {
+		if !errors.Is(err, event.ErrAppendEventsConflict) {
 			t.Fatalf("expect conflict error to occur, got: %v", err)
 		}
 

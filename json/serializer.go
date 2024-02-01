@@ -24,7 +24,7 @@ func NewEventSerializer(namespace string) event.Serializer {
 
 var _ event.Serializer = &eventSerializer{}
 
-func (s *eventSerializer) MarshalEvent(ctx context.Context, evt event.Envelope) (b []byte, n int, err error) {
+func (s *eventSerializer) MarshalEvent(ctx context.Context, evt event.Envelope) (b []byte, err error) {
 	if evt == nil {
 		err = event.ErrMarshalEmptyEvent
 		return
@@ -48,20 +48,16 @@ func (s *eventSerializer) MarshalEvent(ctx context.Context, evt event.Envelope) 
 	}
 	b, err = json.Marshal(jsonEvt)
 
-	n = len(b)
-
 	return
 }
 
-func (s *eventSerializer) MarshalEventBatch(ctx context.Context, events []event.Envelope) (b []byte, n []int, err error) {
+func (s *eventSerializer) MarshalEventBatch(ctx context.Context, events []event.Envelope) (b []byte, err error) {
 	l := len(events)
 
 	if l == 0 {
 		err = event.ErrMarshalEmptyEvent
 		return
 	}
-
-	n = make([]int, l)
 
 	// normalize failure, and do not propagate infra error
 	defer func() {
@@ -80,9 +76,6 @@ func (s *eventSerializer) MarshalEventBatch(ctx context.Context, events []event.
 			return
 		}
 		jsonEvents[i] = *jsonEvt
-
-		bEvt, _ := json.Marshal(jsonEvt)
-		n[i] = len(bEvt)
 	}
 
 	b, err = json.Marshal(jsonEvents)

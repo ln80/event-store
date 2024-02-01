@@ -92,7 +92,7 @@ func (e *jsonEvent) Event() any {
 		return e.fEvent
 	}
 
-	log := logger.Default().
+	log := logger.Default().WithName("avro").
 		WithValues(
 			"stmID", e.StreamID(),
 			"type", e.Type(),

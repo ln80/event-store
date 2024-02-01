@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ln80/event-store/event"
+	event_errors "github.com/ln80/event-store/event/errors"
 	"github.com/ln80/event-store/event/sourcing"
 )
 
@@ -33,7 +34,7 @@ func NewEventStore() *Store {
 	}
 }
 
-func (s *Store) Append(ctx context.Context, id event.StreamID, events []event.Envelope, optFns ...func(*event.AppendOptions)) error {
+func (s *Store) Append(ctx context.Context, id event.StreamID, events []event.Envelope, opts ...func(*event.AppendConfig)) error {
 	if len(events) == 0 {
 		return nil
 	}
@@ -123,7 +124,7 @@ func (s *Store) Load(ctx context.Context, id event.StreamID, trange ...time.Time
 	return fenvs, nil
 }
 
-func (s *Store) AppendToStream(ctx context.Context, chunk sourcing.Stream, optFns ...func(*event.AppendOptions)) error {
+func (s *Store) AppendToStream(ctx context.Context, chunk sourcing.Stream, opts ...func(*event.AppendConfig)) error {
 	if chunk.Empty() {
 		return nil
 	}
@@ -143,14 +144,14 @@ func (s *Store) AppendToStream(ctx context.Context, chunk sourcing.Stream, optFn
 	}
 	firstVersion := chunk.Unwrap()[0].Version()
 	if firstVersion.After(lastVersion) && !firstVersion.Next(lastVersion) {
-		return event.Err(
+		return event_errors.Err(
 			event.ErrAppendEventsFailed, chunk.ID().String(),
-			"invalid sequence ", lastVersion.String(), firstVersion.String(),
+			"invalid sequence "+lastVersion.String()+" "+firstVersion.String(),
 		)
 	}
 
 	// perform the default append
-	return s.Append(ctx, chunk.ID(), chunk.Unwrap(), optFns...)
+	return s.Append(ctx, chunk.ID(), chunk.Unwrap(), opts...)
 }
 
 func (s *Store) LoadStream(ctx context.Context, id event.StreamID, vrange ...event.Version) (*sourcing.Stream, error) {

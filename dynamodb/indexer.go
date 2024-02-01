@@ -2,9 +2,10 @@ package dynamodb
 
 import (
 	"context"
-	"errors"
-	"log"
+	"fmt"
 	"sync"
+
+	"errors"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
@@ -12,49 +13,42 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/ln80/event-store/event"
+	"github.com/ln80/event-store/internal/logger"
 )
 
 var (
-	ErrIndexingRecordFailed = errors.New("indexing record failed")
+	ErrIndexingRecordFailed = errors.New("indexing record has failed")
 )
 
 type Indexer interface {
 	Index(ctx context.Context, rec Record) (err error)
-	// Publish(ctx context.Context, events []event.Envelope) (err error)
 }
 
 type IndexerConfig struct{}
 
-type indexerCache struct {
-	globalID string
-	ver      event.Version
-	rangeKey string
-}
-
 type indexer struct {
-	svc   ClientAPI
+	api   ClientAPI
 	table string
+	cfg   *IndexerConfig
 
-	*IndexerConfig
-
-	// cache contains the last processed record infos (global stream ID, rangeKey, version)
-	cache *indexerCache
-	mu    sync.RWMutex
+	checkpoint *indexerCheckpoint
+	mu         sync.RWMutex
 }
 
 // NewIndexer returns a dynamodb global stream indexer.
-// It keeps track of the global stream current version and increments sequence accordingly.
-// Indexer has an in-memory cache that works effectively only if the instance receives
-// records that belong to the same global stream, otherwise the cache is cleared and
-// synced with the new global stream current state.
+// It keeps track of the global stream current version and increments sequence accordingly by using a Dynamodb LSI
 //
-// Note that Dynamodb change stream Lambda source mapper allows the use of a such cache mechanism:
-// It does not concurrently distribute a partition-related events to different Lambda instances.
-// At the moment the partition key and global stream have a one-to-one relation.
-// Changing this in the future requires a draining logic to allow a safe transition to the next partition
-// (for a given global stream).
-func NewIndexer(dbsvc ClientAPI, table string, opts ...func(cfg *IndexerConfig)) *indexer {
-	if dbsvc == nil {
+// It has an in-memory cache that works effectively only if the instance keeps receiving records from the same global stream.
+// Otherwise the cache is cleared and synced with the new global stream's current state.
+//
+// The use of a such cache is only possible because Dynamodb Lambda event source mapper allows it:
+//   - It does not concurrently distribute a partition-related record to different Lambda instances.
+//   - The partition key and global stream have a one-to-one relation.
+//
+// The later one-to-one point might change in the future to overcome the 10GB size limit.
+// This may require a draining logic to allow a safer transition to the next partition.
+func NewIndexer(api ClientAPI, table string, opts ...func(cfg *IndexerConfig)) *indexer {
+	if api == nil {
 		panic("event indexer invalid Dynamodb client: nil value")
 	}
 	if table == "" {
@@ -62,176 +56,198 @@ func NewIndexer(dbsvc ClientAPI, table string, opts ...func(cfg *IndexerConfig))
 	}
 
 	indexer := &indexer{
-		svc:           dbsvc,
-		table:         table,
-		cache:         &indexerCache{},
-		IndexerConfig: &IndexerConfig{},
+		api:        api,
+		table:      table,
+		checkpoint: &indexerCheckpoint{},
+		cfg:        &IndexerConfig{},
 	}
 
 	for _, opt := range opts {
 		if opt == nil {
 			continue
 		}
-		opt(indexer.IndexerConfig)
+		opt(indexer.cfg)
 	}
 
 	return indexer
 }
 
-func (i *indexer) getCache(id string) *indexerCache {
-	i.mu.Lock()
-	defer i.mu.Unlock()
-
-	if i.cache.globalID != id {
-		log.Println("global stream indexing cache changed", i.cache.globalID, id)
-		i.cache = &indexerCache{
-			globalID: id,
-		}
-	}
-
-	return i.cache
-}
-
-func (i *indexer) setCache(cache *indexerCache) {
-	i.mu.Lock()
-	defer i.mu.Unlock()
-
-	i.cache = cache
-}
-
 func (i *indexer) Index(ctx context.Context, rec Record) (err error) {
-	// do not skip empty record; this might be error-prone
-	// this logic is subject to change...
-	if len(rec.Events) == 0 {
-		return event.Err(ErrIndexingRecordFailed, "empty record: "+rec.HashKey+" "+rec.RangeKey)
-	}
-
-	var (
-		globalID                  string        // global stream id
-		isRetry                   bool          // indicates whether or not record is already processed (handles idempotency)
-		previousGVer, currentGVer event.Version // last and current version to persist into the record
+	log := logger.WithStream(
+		logger.
+			FromContext(ctx).
+			WithName("dynamodb").
+			WithValues("record", rec.Keys()),
+		rec.GID,
 	)
+	log.V(1).Info("Do index record")
 
-	globalID = rec.GID
+	globalID := rec.GID
 
 	defer func() {
-		if err == nil && globalID != "" && !isRetry {
-			cache := i.getCache(globalID)
-
-			cache.ver = cache.ver.Incr()
-			cache.rangeKey = rec.RangeKey
-
-			i.setCache(cache)
-
+		if err != nil {
+			log.V(1).Info("Failed to index record", "error", err.Error())
+			err = fmt.Errorf("%w: for %s, err: %v", ErrIndexingRecordFailed, globalID, err)
+			return
 		}
+		log.V(1).Info("Record indexed")
 	}()
 
-	if ver := i.getCache(globalID).ver; ver != event.VersionZero {
-		previousGVer = ver
+	if len(rec.Events) == 0 {
+		err = fmt.Errorf("empty record %v", rec.Keys())
+		return
+	}
+
+	i.mu.Lock()
+	defer i.mu.Unlock()
+
+	oldGlobalID := i.checkpoint.globalID
+	swapped := i.checkpoint.swap(globalID)
+	if swapped {
+		log.V(1).Info("Current global stream changed", "old_gstmID", oldGlobalID, "new_gstmID", globalID)
 	} else {
-		expr, _ := expression.
-			NewBuilder().
-			WithKeyCondition(
-				expression.Key(HashKey).
-					Equal(expression.Value(rec.HashKey)),
-			).
-			WithProjection(expression.NamesList(
-				expression.Name(HashKey),
-				expression.Name(RangeKey),
-				expression.Name(LocalIndexRangeKey),
-			)).
-			Build()
+		log.V(1).Info("Current global stream remains the same")
+	}
 
-		out, err := i.svc.Query(ctx, &dynamodb.QueryInput{
-			TableName:                 aws.String(i.table),
-			KeyConditionExpression:    expr.KeyCondition(),
-			FilterExpression:          expr.Filter(),
-			ProjectionExpression:      expr.Projection(),
-			ExpressionAttributeNames:  expr.Names(),
-			ExpressionAttributeValues: expr.Values(),
-			ConsistentRead:            aws.Bool(true),
-			IndexName:                 aws.String(LocalIndex),
-			ScanIndexForward:          aws.Bool(false),
-			Limit:                     aws.Int32(1),
-		})
+	prevGVer := i.checkpoint.Version()
+	if prevGVer == event.VersionZero {
+		var prevIndexedRecord *Record
+		prevIndexedRecord, err = i.prevIndexedRecord(ctx, rec)
 		if err != nil {
-			return event.Err(ErrIndexingRecordFailed, globalID, err)
+			return
 		}
-
-		if l := len(out.Items); l == 0 {
-			previousGVer = event.VersionZero
+		if prevIndexedRecord == nil {
+			log.V(1).Info("Previous indexed record not found, previous global stream version is set to zero")
 		} else {
-			lastRecord := Record{}
-			if err := attributevalue.UnmarshalMap(out.Items[0], &lastRecord); err != nil {
-				return event.Err(ErrIndexingRecordFailed, globalID, err)
-			}
-
-			previousGVer, err = event.ParseVersion(lastRecord.Item.LSIRangeKey)
+			prevGVer, err = event.ParseVersion(prevIndexedRecord.Item.LSIRangeKey)
 			if err != nil {
-				return event.Err(ErrIndexingRecordFailed, globalID, err)
+				return
 			}
-
-			// refresh cache
-			i.setCache(&indexerCache{
-				ver:      previousGVer,
-				rangeKey: lastRecord.RangeKey,
-				globalID: globalID,
-			})
+			i.checkpoint.update(prevIndexedRecord.RangeKey, prevGVer)
 		}
 	}
 
-	// TBD: I'm not sure about throwing this error (preventive mode)
-	// if i.getCache(globalID).rangeKey > rec.RangeKey {
-	// 	return nil, event.Err(ErrIndexingRecordFailed, globalID, "old record behind the current checkpoint")
-	// }
-
-	if i.getCache(globalID).rangeKey == rec.RangeKey {
-		isRetry = true
+	if i.checkpoint.Key() == rec.RangeKey {
+		log.V(0).Info("Skip indexing the same record", "gver", i.checkpoint.Version())
+		return
 	}
 
-	currentGVer = previousGVer
-	// do not increment the global version if it's a retry
-	if !isRetry {
-		currentGVer = currentGVer.Incr()
+	currentGVer := prevGVer.Incr()
+	if err = i.updateRecordIndex(ctx, rec, currentGVer); err != nil {
+		return
+	}
+	i.checkpoint.update(rec.RangeKey, currentGVer)
+
+	return
+}
+
+func (i *indexer) prevIndexedRecord(ctx context.Context, rec Record) (*Record, error) {
+	expr, _ := expression.
+		NewBuilder().
+		WithKeyCondition(
+			expression.Key(HashKey).
+				Equal(expression.Value(rec.HashKey)),
+		).
+		WithProjection(expression.NamesList(
+			expression.Name(HashKey),
+			expression.Name(RangeKey),
+			expression.Name(LocalIndexRangeKey),
+		)).
+		Build()
+
+	out, err := i.api.Query(ctx, &dynamodb.QueryInput{
+		TableName:                 aws.String(i.table),
+		KeyConditionExpression:    expr.KeyCondition(),
+		FilterExpression:          expr.Filter(),
+		ProjectionExpression:      expr.Projection(),
+		ExpressionAttributeNames:  expr.Names(),
+		ExpressionAttributeValues: expr.Values(),
+		ConsistentRead:            aws.Bool(true),
+		IndexName:                 aws.String(LocalIndex),
+		ScanIndexForward:          aws.Bool(false),
+		Limit:                     aws.Int32(1),
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	// If it's not a retry then update the record's global version
-	if !isRetry {
-		expr, _ := expression.
-			NewBuilder().
-			WithUpdate(
-				expression.
-					Set(expression.Name(GVerAttribute), expression.Value(currentGVer.String())).
-					Set(expression.Name(LocalIndexRangeKey), expression.Value(currentGVer.String())),
-			).
-			WithCondition(
-				expression.AttributeNotExists(
-					expression.Name(GVerAttribute),
-				).And(
-					expression.AttributeExists(
-						expression.Name(HashKey),
-					),
-				).And(expression.AttributeExists(
-					expression.Name(RangeKey),
-				)),
-			).Build()
-		if _, err = i.svc.UpdateItem(ctx, &dynamodb.UpdateItemInput{
-			Key: map[string]types.AttributeValue{
-				HashKey:  &types.AttributeValueMemberS{Value: rec.HashKey},
-				RangeKey: &types.AttributeValueMemberS{Value: rec.RangeKey},
-			},
-			TableName:                 aws.String(i.table),
-			ConditionExpression:       expr.Condition(),
-			ExpressionAttributeNames:  expr.Names(),
-			ExpressionAttributeValues: expr.Values(),
-			UpdateExpression:          expr.Update(),
-		}); err != nil {
-			// if IsConditionCheckFailure(err) && isRetry {
-			// 	return events, nil // tolerate conditional failure is
-			// }
-			return event.Err(ErrIndexingRecordFailed, globalID, err)
-		}
+	if l := len(out.Items); l == 0 {
+		return nil, nil
+	}
+
+	prevIndexedRecord := &Record{}
+	if err := attributevalue.UnmarshalMap(out.Items[0], prevIndexedRecord); err != nil {
+		return nil, err
+	}
+
+	return prevIndexedRecord, nil
+}
+
+func (i *indexer) updateRecordIndex(ctx context.Context, rec Record, version event.Version) error {
+	expr, _ := expression.
+		NewBuilder().
+		WithUpdate(
+			expression.
+				Set(expression.Name(GVerAttribute), expression.Value(version.String())).
+				Set(expression.Name(LocalIndexRangeKey), expression.Value(version.String())),
+		).
+		// Make sure the item already exists and is not indexed
+		WithCondition(
+			expression.AttributeNotExists(
+				expression.Name(GVerAttribute),
+			).And(
+				expression.AttributeExists(
+					expression.Name(HashKey),
+				),
+			).And(expression.AttributeExists(
+				expression.Name(RangeKey),
+			)),
+		).Build()
+	if _, err := i.api.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+		Key: map[string]types.AttributeValue{
+			HashKey:  &types.AttributeValueMemberS{Value: rec.HashKey},
+			RangeKey: &types.AttributeValueMemberS{Value: rec.RangeKey},
+		},
+		TableName:                 aws.String(i.table),
+		ConditionExpression:       expr.Condition(),
+		ExpressionAttributeNames:  expr.Names(),
+		ExpressionAttributeValues: expr.Values(),
+		UpdateExpression:          expr.Update(),
+	}); err != nil {
+		return err
 	}
 
 	return nil
+}
+
+// indexerCheckpoint used by indexer, note that it's not THREAD SAFE.
+type indexerCheckpoint struct {
+	globalID string
+	version  event.Version
+	key      string
+}
+
+func (ic *indexerCheckpoint) swap(id string) bool {
+	var swapped bool
+	if ic.globalID != id {
+		ic.globalID = id
+		ic.version = event.VersionZero
+		ic.key = ""
+		swapped = true
+	}
+
+	return swapped
+}
+
+func (ic *indexerCheckpoint) update(rangeKey string, ver event.Version) {
+	ic.key = rangeKey
+	ic.version = ver
+}
+
+func (ic *indexerCheckpoint) Key() string {
+	return ic.key
+}
+
+func (ic *indexerCheckpoint) Version() event.Version {
+	return ic.version
 }

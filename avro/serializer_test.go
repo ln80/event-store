@@ -7,7 +7,7 @@ import (
 
 	avro_memory "github.com/ln80/event-store/avro/memory"
 	"github.com/ln80/event-store/event"
-	"github.com/ln80/event-store/testutil"
+	"github.com/ln80/event-store/internal/testutil"
 )
 
 func BenchmarkSerializer(b *testing.B) {
@@ -72,11 +72,11 @@ func TestSerializer_WithError(t *testing.T) {
 			esc.ReadOnly = true
 		})
 
-		_, _, err := ser.MarshalEvent(ctx, event.Wrap(ctx, event.NewStreamID("service1", "id"), testutil.GenEvents(1))[0])
+		_, err := ser.MarshalEvent(ctx, event.Wrap(ctx, event.NewStreamID("service1", "id"), testutil.GenEvents(1))[0])
 		if want, got := ErrReadOnlyModeEnabled, err; !errors.Is(got, want) {
 			t.Fatalf("expect %v, %v be equals", want, got)
 		}
-		_, _, err = ser.MarshalEventBatch(ctx, event.Wrap(ctx, event.NewStreamID("service1", "id"), testutil.GenEvents(1)))
+		_, err = ser.MarshalEventBatch(ctx, event.Wrap(ctx, event.NewStreamID("service1", "id"), testutil.GenEvents(1)))
 		if want, got := ErrReadOnlyModeEnabled, err; !errors.Is(got, want) {
 			t.Fatalf("expect %v, %v be equals", want, got)
 		}
@@ -87,11 +87,11 @@ func TestSerializer_WithError(t *testing.T) {
 
 		ser := NewEventSerializer(ctx, registry)
 
-		_, _, err := ser.MarshalEvent(ctx, nil)
+		_, err := ser.MarshalEvent(ctx, nil)
 		if want, got := event.ErrMarshalEmptyEvent, err; !errors.Is(got, want) {
 			t.Fatalf("expect %v, %v be equals", want, got)
 		}
-		_, _, err = ser.MarshalEventBatch(ctx, nil)
+		_, err = ser.MarshalEventBatch(ctx, nil)
 		if want, got := event.ErrMarshalEmptyEvent, err; !errors.Is(got, want) {
 			t.Fatalf("expect %v, %v be equals", want, got)
 		}
@@ -104,11 +104,11 @@ func TestSerializer_WithError(t *testing.T) {
 			esc.SkipCurrentSchema = true
 		})
 
-		_, _, err := ser.MarshalEvent(ctx, event.Wrap(ctx, event.NewStreamID("service1", "id"), testutil.GenEvents(1))[0])
+		_, err := ser.MarshalEvent(ctx, event.Wrap(ctx, event.NewStreamID("service1", "id"), testutil.GenEvents(1))[0])
 		if want, got := event.ErrMarshalEventFailed, err; !errors.Is(got, want) {
 			t.Fatalf("expect %v, %v be equals", want, got)
 		}
-		_, _, err = ser.MarshalEventBatch(ctx, event.Wrap(ctx, event.NewStreamID("service1", "id"), testutil.GenEvents(1)))
+		_, err = ser.MarshalEventBatch(ctx, event.Wrap(ctx, event.NewStreamID("service1", "id"), testutil.GenEvents(1)))
 		if want, got := event.ErrMarshalEventFailed, err; !errors.Is(got, want) {
 			t.Fatalf("expect %v, %v be equals", want, got)
 		}

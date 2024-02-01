@@ -2,7 +2,8 @@ package event
 
 import (
 	"context"
-	"errors"
+
+	"github.com/ln80/event-store/event/errors"
 )
 
 var (
@@ -15,11 +16,11 @@ var (
 type Serializer interface {
 
 	// MarshalEvent returns a binary version of the event and its size according to the supported format.
-	MarshalEvent(ctx context.Context, event Envelope) ([]byte, int, error)
+	MarshalEvent(ctx context.Context, event Envelope) ([]byte, error)
 
 	// MarshalEventBatch returns a binary version of the given chunk of events. It also returns a slice of events' size.
 	// It fails if chunk is empty.
-	MarshalEventBatch(ctx context.Context, events []Envelope) ([]byte, []int, error)
+	MarshalEventBatch(ctx context.Context, events []Envelope) ([]byte, error)
 
 	// UnmarshalEvent returns an event envelope based on the binary/raw given event.
 	// The returned envelope might be nil in case the event type if not found in the registry.

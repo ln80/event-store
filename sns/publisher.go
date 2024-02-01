@@ -2,6 +2,7 @@ package sns
 
 import (
 	"context"
+	"encoding/base64"
 	"sort"
 	"strings"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sns"
 	"github.com/aws/aws-sdk-go-v2/service/sns/types"
 	"github.com/ln80/event-store/event"
+	"github.com/ln80/event-store/internal/logger"
 	"github.com/ln80/event-store/json"
 )
 
@@ -19,19 +21,19 @@ type PublisherConfig struct {
 }
 
 type Publisher struct {
-	svc   ClientAPI
+	api   ClientAPI
 	topic string
 	*PublisherConfig
 }
 
 var _ event.Publisher = &Publisher{}
 
-func NewPublisher(svc ClientAPI, topic string, opts ...func(cfg *PublisherConfig)) *Publisher {
-	if svc == nil {
+func NewPublisher(api ClientAPI, topic string, opts ...func(cfg *PublisherConfig)) *Publisher {
+	if api == nil {
 		panic("event publisher invalid SNS client: nil value")
 	}
 	pub := &Publisher{
-		svc:   svc,
+		api:   api,
 		topic: topic,
 		PublisherConfig: &PublisherConfig{
 			Serializer:         json.NewEventSerializer(""),
@@ -73,17 +75,17 @@ func (p *Publisher) Publish(ctx context.Context, events []event.Envelope) (err e
 }
 
 func (p *Publisher) publish(ctx context.Context, events []event.Envelope) error {
-	// Note using the SNS built-in PublishBatch method might be performant, but it requires some tweaks to handle:
+	log := logger.FromContext(ctx).WithName("sns")
+	log.V(1).Info("Do SNS Publish", "count", len(events))
+	// Note using the SNS built-in PublishBatch method might be performant, but it presents challenges to handle:
 	// - batch message size limit is the same as the size a single message using Publish method
-	// - The retry logic of partially failed batch might corrupt the publishing order (TODO: add link to docs).
+	// - The retry logic of partially failed batch might corrupt the publishing order.
 	for _, evt := range events {
-		msg, _, err := p.Serializer.MarshalEvent(ctx, evt)
+		msg, err := p.Serializer.MarshalEvent(ctx, evt)
 		if err != nil {
 			return err
 		}
-		// body := base64.StdEncoding.EncodeToString(msg)
-		body := string(msg)
-
+		body := base64.StdEncoding.EncodeToString(msg)
 		attributes := map[string]types.MessageAttributeValue{
 			"StmID": {
 				DataType:    aws.String("String"),
@@ -101,7 +103,7 @@ func (p *Publisher) publish(ctx context.Context, events []event.Envelope) error 
 			}
 		}
 
-		if _, err = p.svc.Publish(ctx, &sns.PublishInput{
+		if _, err = p.api.Publish(ctx, &sns.PublishInput{
 			Message:                aws.String(body),
 			TopicArn:               aws.String(p.topic),
 			MessageAttributes:      attributes,
@@ -117,12 +119,14 @@ func (p *Publisher) publish(ctx context.Context, events []event.Envelope) error 
 }
 
 func (p *Publisher) publishRecord(ctx context.Context, events []event.Envelope) error {
-	record, _, err := p.Serializer.MarshalEventBatch(ctx, events)
+	log := logger.FromContext(ctx).WithName("sns")
+	log.V(1).Info("Do SNS Publish BATCH", "count", len(events))
+
+	record, err := p.Serializer.MarshalEventBatch(ctx, events)
 	if err != nil {
 		return err
 	}
-	// body := base64.StdEncoding.EncodeToString(record)
-	body := string(record)
+	body := base64.StdEncoding.EncodeToString(record)
 
 	_types := make([]string, 0)
 	for _, evt := range events {
@@ -161,7 +165,7 @@ func (p *Publisher) publishRecord(ctx context.Context, events []event.Envelope) 
 			StringValue: aws.String(strings.Join(dests, ",")),
 		}
 	}
-	_, err = p.svc.Publish(ctx, &sns.PublishInput{
+	_, err = p.api.Publish(ctx, &sns.PublishInput{
 		Message:                aws.String(body),
 		TopicArn:               aws.String(p.topic),
 		MessageAttributes:      attributes,
@@ -172,6 +176,7 @@ func (p *Publisher) publishRecord(ctx context.Context, events []event.Envelope) 
 	return err
 }
 
+// compact has to be deprecated in favor of slices.Compact func once go 1.21 is supported.
 func (p *Publisher) compact(s []string) []string {
 	if len(s) < 2 {
 		return s

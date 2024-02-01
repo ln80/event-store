@@ -46,7 +46,7 @@ func NewEventSerializer(ctx context.Context, registry avro_registry.Registry, op
 		err error
 	)
 
-	log := logger.Default().WithName("avro").WithValues("namespace", cfg.Namespace)
+	log := logger.FromContext(ctx).WithName("avro").WithValues("namespace", cfg.Namespace)
 
 	if !cfg.SkipCurrentSchema {
 		sch, err = eventSchema(registry.API(), cfg.Namespace)
@@ -73,7 +73,7 @@ func NewEventSerializer(ctx context.Context, registry avro_registry.Registry, op
 var _ event.Serializer = &EventSerializer{}
 
 // MarshalEvent implements event.Serializer.
-func (s *EventSerializer) MarshalEvent(ctx context.Context, evt event.Envelope) (b []byte, n int, err error) {
+func (s *EventSerializer) MarshalEvent(ctx context.Context, evt event.Envelope) (b []byte, err error) {
 	if s.cfg.ReadOnly {
 		err = ErrReadOnlyModeEnabled
 		return
@@ -104,14 +104,12 @@ func (s *EventSerializer) MarshalEvent(ctx context.Context, evt event.Envelope) 
 		return
 	}
 
-	n = len(b)
-
 	return
 }
 
 // MarshalEventBatch implements event.Serializer.
 // Note event size per item n []int is not supported at the moment
-func (s *EventSerializer) MarshalEventBatch(ctx context.Context, events []event.Envelope) (b []byte, n []int, err error) {
+func (s *EventSerializer) MarshalEventBatch(ctx context.Context, events []event.Envelope) (b []byte, err error) {
 	if s.cfg.ReadOnly {
 		err = ErrReadOnlyModeEnabled
 		return
@@ -122,8 +120,6 @@ func (s *EventSerializer) MarshalEventBatch(ctx context.Context, events []event.
 		err = event.ErrMarshalEmptyEvent
 		return
 	}
-
-	n = make([]int, l)
 
 	// normalize failure, and do not propagate infra error
 	defer func() {

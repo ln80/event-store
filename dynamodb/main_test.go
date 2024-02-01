@@ -14,7 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/ln80/event-store/event"
-	"github.com/ln80/event-store/testutil"
+	"github.com/ln80/event-store/internal/testutil"
 )
 
 var dbsvc AdminAPI
@@ -41,7 +41,7 @@ func awsConfig(endpoint string) (cfg aws.Config, err error) {
 }
 
 func makeRecord(ser event.Serializer, globalID string, envs []event.Envelope) Record {
-	chunk, _, _ := ser.MarshalEventBatch(context.TODO(), envs)
+	chunk, _ := ser.MarshalEventBatch(context.TODO(), envs)
 	t := envs[len(envs)-1].At()
 	id := event.NewStreamID(globalID)
 

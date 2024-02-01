@@ -14,9 +14,9 @@ const (
 	HashKey            string = "_pk"
 	RangeKey           string = "_sk"
 	TTLAttribute       string = "_ttl"
-	GVerAttribute      string = "_gver"
 	LocalIndexRangeKey string = "_lsik"
 	LocalIndex         string = "_lsi"
+	TraceIDAttribute   string = "_traceID"
 )
 
 type Item struct {
@@ -24,6 +24,7 @@ type Item struct {
 	RangeKey    string `dynamodbav:"_sk"`
 	LSIRangeKey string `dynamodbav:"_lsik,omitempty" localIndex:"_lsi,range"`
 	TTL         int64  `dynamodbav:"_ttl,omitempty"`
+	TraceID     string `dynamodbav:"_traceID,omitempty"`
 }
 
 func CreateTable(ctx context.Context, svc AdminAPI, table string) error {
@@ -100,7 +101,7 @@ func CreateTable(ctx context.Context, svc AdminAPI, table string) error {
 }
 
 func DeleteTable(ctx context.Context, svc AdminAPI, table string) error {
-	if _, err := svc.DeleteTable(context.TODO(), &dynamodb.DeleteTableInput{
+	if _, err := svc.DeleteTable(ctx, &dynamodb.DeleteTableInput{
 		TableName: aws.String(table),
 	}); err != nil {
 		return err

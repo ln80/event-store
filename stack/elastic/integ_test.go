@@ -14,20 +14,38 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	"github.com/aws/aws-xray-sdk-go/instrumentation/awsv2"
+	"github.com/aws/aws-xray-sdk-go/xray"
+	es "github.com/ln80/event-store"
 	"github.com/ln80/event-store/avro"
 	"github.com/ln80/event-store/avro/glue"
 	"github.com/ln80/event-store/dynamodb"
 	"github.com/ln80/event-store/event"
-	"github.com/ln80/event-store/stack/elastic/utils"
-	"github.com/ln80/event-store/testutil"
+	"github.com/ln80/event-store/internal/logger"
+	"github.com/ln80/event-store/internal/testutil"
+	"github.com/ln80/event-store/stack/elastic/shared"
 )
 
 func init() {
 	testutil.RegisterEvent("")
+
 }
 
 func TestIntegration(t *testing.T) {
-	ctx := context.Background()
+	ctx, err := xray.ContextWithConfig(
+		context.Background(),
+		xray.Config{
+			DaemonAddr:     "127.0.0.1:2000", // default
+			ServiceVersion: "3.3.10",
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, seg := xray.BeginSegment(ctx, "Elastic::IntegrationTest")
+	defer seg.Close(nil)
+
+	logger.SetDefault(logger.New().WithValues("x-traceID", seg.TraceID))
 
 	stackName := os.Getenv("STACK_NAME")
 	if stackName == "" {
@@ -43,6 +61,7 @@ func TestIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	awsv2.AWSV2Instrumentor(&cfg.APIOptions)
 
 	output, err := cloudformation.NewFromConfig(cfg).DescribeStacks(ctx, &cloudformation.DescribeStacksInput{
 		StackName: &stackName,
@@ -76,16 +95,21 @@ func TestIntegration(t *testing.T) {
 		ctx,
 		glue.NewRegistry(
 			registryName,
-			utils.InitGlueClient(cfg),
+			shared.InitGlueClient(cfg),
 		),
 		func(esc *avro.EventSerializerConfig) {
 			esc.Namespace = ""
 		},
 	)
 
-	store := dynamodb.NewEventStore(utils.InitDynamodbClient(cfg), table, func(sc *dynamodb.StoreConfig) {
-		sc.Serializer = serializer
-	})
+	store := es.NewElasticStore(
+		table,
+		func(esc *es.ElasticStoreConfig) {
+			esc.DynamodbClient = shared.InitDynamodbClient(cfg)
+			esc.AddDynamodbStoreOption(func(sc *dynamodb.StoreConfig) {
+				sc.Serializer = serializer
+			})
+		})
 
 	testutil.TestEventLoggingStore(t, ctx, store)
 
@@ -98,12 +122,16 @@ func TestIntegration(t *testing.T) {
 		}
 	})
 
-	// assert that a sample of events were forwarded to consumer queue
+	// assert that a sample of events were forwarded to the queue.
 	if err := retry(2, time.Second, func() error {
 		output, err := sqs.NewFromConfig(cfg).ReceiveMessage(ctx, &sqs.ReceiveMessageInput{
 			QueueUrl:            &queueUrl,
 			MaxNumberOfMessages: 10,
+			// AttributeNames: []types.QueueAttributeName{
+			// 	"AWSTraceHeader",
+			// },
 		})
+
 		if err != nil {
 			t.Fatalf("failed to receive messages: %v", err)
 		}

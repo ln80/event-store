@@ -21,13 +21,13 @@ func TestStream(t *testing.T) {
 
 	stm := Wrap(ctx, stmID, event.VersionZero, events)
 
-	if want, val := stmID, stm.ID(); want.String() != val.String() {
-		t.Fatalf("expect %v, %v be equals", want, val)
+	if want, got := stmID, stm.ID(); want.String() != got.String() {
+		t.Fatalf("expect %v, %v be equals", want, got)
 	}
-	if want, val := event.NewVersion().Add(0, 1).EOF(), stm.Version(); !want.Equal(val) {
-		t.Fatalf("expect %v, %v be equals", want, val)
+	if want, got := event.NewVersion().Add(0, 1).EOF(), stm.Version(); !want.Equal(got) {
+		t.Fatalf("expect %v, %v be equals", want, got)
 	}
-	if want, val := events, stm.Unwrap().Events(); !reflect.DeepEqual(want, val) {
-		t.Fatalf("expect %v, %v be equals", want, val)
+	if want, got := events, stm.Unwrap().Events(); !reflect.DeepEqual(want, got) {
+		t.Fatalf("expect %v, %v be equals", want, got)
 	}
 }

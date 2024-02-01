@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"context"
 	"io"
 	"os"
 	"sync"
@@ -63,6 +64,30 @@ func SetDefault(log logr.Logger) {
 	defaultLogger = log
 }
 
+func Discard() logr.Logger {
+	return logr.Discard()
+}
+
 func Default() logr.Logger {
 	return defaultLogger
+}
+
+func FromContext(ctx context.Context) logr.Logger {
+	logger, err := logr.FromContext(ctx)
+	if err != nil {
+		return Default()
+	}
+	return logger
+}
+
+func NewContext(ctx context.Context, logger logr.Logger) context.Context {
+	return logr.NewContext(ctx, logger)
+}
+
+func WithStream(logger logr.Logger, gstmID string) logr.Logger {
+	return logger.WithValues("gstmID", gstmID)
+}
+
+func WithTrace(logger logr.Logger, traceID string) logr.Logger {
+	return logger.WithValues("x-traceID", traceID)
 }

@@ -2,40 +2,54 @@ package main
 
 import (
 	"context"
-	"log"
 	"os"
 
 	"github.com/aws/aws-lambda-go/lambda"
-	"github.com/aws/aws-sdk-go-v2/config"
+	appconfig "github.com/ln80/event-store/appconfig"
+	"github.com/ln80/event-store/control"
 	"github.com/ln80/event-store/dynamodb"
-	"github.com/ln80/event-store/stack/elastic/utils"
+	"github.com/ln80/event-store/internal/logger"
+	"github.com/ln80/event-store/stack/elastic/shared"
 )
 
 var (
 	indexer dynamodb.Indexer
+
+	emergencyRedirect shared.EmergencyRedirectFunc
 )
 
-func init() {
-	table := os.Getenv("DYNAMODB_TABLE")
-	if table == "" {
-		log.Fatalf(`
-			missed env params:
-				DYNAMODB_TABLE: %v,
-		`, table)
-	}
-
-	cfg, err := config.LoadDefaultConfig(
-		context.Background(),
-	)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	indexer = dynamodb.NewIndexer(utils.InitDynamodbClient(cfg), table)
-}
-
 func main() {
+	ctx := context.Background()
 
-	// logger.Default().Info("boom")
-	lambda.Start(makeHandler(indexer))
+	shared.InitLogger("elastic")
+
+	cfg := shared.MustLoadConfig()
+
+	indexer = dynamodb.NewIndexer(shared.InitDynamodbClient(cfg), shared.MustGetenv("DYNAMODB_TABLE"))
+
+	found, application, environment, configuration := shared.MustParseConfigPathEnv()
+	if found {
+		loader, err := appconfig.NewLoader(ctx, shared.InitAppConfigClient(cfg), func(lc *appconfig.LoaderConfig) {
+			lc.Application = application
+			lc.Environment = environment
+			lc.Configuration = configuration
+		})
+		if err != nil {
+			logger.Default().Error(err, "")
+			os.Exit(1)
+		}
+		featureToggler, err := control.NewFeatureToggler(ctx, loader)
+		if err != nil {
+			logger.Default().Error(err, "")
+			os.Exit(1)
+		}
+
+		emergencyRedirect = shared.MakeEmergencyRedirect(
+			shared.InitSNSClient(cfg),
+			shared.MustGetenv("EMERGENCY_REDIRECT_FIFO_TOPIC"),
+			featureToggler,
+		)
+	}
+
+	lambda.Start(makeHandler(indexer, emergencyRedirect))
 }

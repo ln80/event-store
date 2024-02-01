@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/ln80/event-store/event"
-	"github.com/ln80/event-store/testutil"
+	"github.com/ln80/event-store/internal/testutil"
 )
 
 func BenchmarkSerializer(b *testing.B) {
@@ -46,11 +46,11 @@ func TestSerializer_WithError(t *testing.T) {
 
 		ser := NewEventSerializer("")
 
-		_, _, err := ser.MarshalEvent(ctx, nil)
+		_, err := ser.MarshalEvent(ctx, nil)
 		if want, got := event.ErrMarshalEmptyEvent, err; !errors.Is(got, want) {
 			t.Fatalf("expect %v, %v be equals", want, got)
 		}
-		_, _, err = ser.MarshalEventBatch(ctx, nil)
+		_, err = ser.MarshalEventBatch(ctx, nil)
 		if want, got := event.ErrMarshalEmptyEvent, err; !errors.Is(got, want) {
 			t.Fatalf("expect %v, %v be equals", want, got)
 		}

@@ -1,13 +1,17 @@
-package utils
+package shared
 
 import (
 	"context"
 	"os"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/appconfigdata"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/glue"
 	"github.com/aws/aws-sdk-go-v2/service/sns"
+	"github.com/aws/aws-xray-sdk-go/instrumentation/awsv2"
+	"github.com/ln80/event-store/internal/logger"
 )
 
 func InitDynamodbClient(cfg aws.Config) *dynamodb.Client {
@@ -22,6 +26,10 @@ func InitGlueClient(cfg aws.Config) *glue.Client {
 	return glue.NewFromConfig(cfg)
 }
 
+func InitAppConfigClient(cfg aws.Config) *appconfigdata.Client {
+	return appconfigdata.NewFromConfig(cfg)
+}
+
 // HackCtx to workaround https://github.com/aws/aws-sam-cli/issues/2510
 // seems be fixed in sam cli 1.37.0
 func HackCtx(ctx context.Context) context.Context {
@@ -30,4 +38,18 @@ func HackCtx(ctx context.Context) context.Context {
 	}
 
 	return ctx
+}
+
+func MustLoadConfig() aws.Config {
+	cfg, err := config.LoadDefaultConfig(
+		context.Background(),
+	)
+	if err != nil {
+		logger.Default().Error(err, "failed to load AWS config")
+		os.Exit(1)
+	}
+
+	awsv2.AWSV2Instrumentor(&cfg.APIOptions)
+
+	return cfg
 }

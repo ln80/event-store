@@ -11,8 +11,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/expression"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/ln80/event-store/event"
+	"github.com/ln80/event-store/internal/testutil"
 	"github.com/ln80/event-store/json"
-	"github.com/ln80/event-store/testutil"
 )
 
 func TestEventIndexer(t *testing.T) {
@@ -28,7 +28,7 @@ func TestEventIndexer(t *testing.T) {
 					expression.Key(HashKey).
 						Equal(expression.Value(recordHashKey(event.NewStreamID(id.GlobalID())))).And(
 						expression.Key(RangeKey).
-							BeginsWith(strings.Join(id.Parts(), event.StreamIDPartsDelimiter) + "t_")),
+							BeginsWith(strings.Join(id.Parts(), event.StreamIDPartsDelimiter) + "@t_")),
 				).
 				Build()
 			out, err := dbsvc.Query(ctx, &dynamodb.QueryInput{
@@ -69,7 +69,7 @@ func TestEventIndexer(t *testing.T) {
 				},
 			}, func(env event.RWEnvelope) {
 				env.SetAt(evtAt)
-				evtAt = evtAt.Add(1 * time.Minute)
+				evtAt = evtAt.Add(1 * time.Second)
 			})
 
 			if err := store.Append(ctx, event.NewStreamID(globalID), okEnvs_1); err != nil {
@@ -84,7 +84,7 @@ func TestEventIndexer(t *testing.T) {
 			if err != nil {
 				t.Fatal("expect err be nil, got", err)
 			}
-			events, err := UnmarshalRecord(ctx, rr, ser)
+			events, err := UnpackRecord(ctx, rr, ser)
 			if err != nil {
 				t.Fatal("expect err be nil, got", err)
 			}
@@ -107,7 +107,7 @@ func TestEventIndexer(t *testing.T) {
 				},
 			}, func(env event.RWEnvelope) {
 				env.SetAt(evtAt)
-				evtAt = evtAt.Add(1 * time.Minute)
+				evtAt = evtAt.Add(1 * time.Second)
 			})
 
 			if err = store.Append(ctx, event.NewStreamID(globalID), okEnvs_2); err != nil {
@@ -123,7 +123,7 @@ func TestEventIndexer(t *testing.T) {
 			if err != nil {
 				t.Fatal("expect err be nil, got", err)
 			}
-			events, err = UnmarshalRecord(ctx, rr, ser)
+			events, err = UnpackRecord(ctx, rr, ser)
 			if err != nil {
 				t.Fatal("expect err be nil, got", err)
 			}
@@ -145,7 +145,7 @@ func TestEventIndexer(t *testing.T) {
 			if err != nil {
 				t.Fatal("expect err be nil, got", err)
 			}
-			events, err = UnmarshalRecord(ctx, rr, ser)
+			events, err = UnpackRecord(ctx, rr, ser)
 			if err != nil {
 				t.Fatal("expect err be nil, got", err)
 			}
@@ -164,7 +164,7 @@ func TestEventIndexer(t *testing.T) {
 			if err != nil {
 				t.Fatal("expect err be nil, got", err)
 			}
-			events, err = UnmarshalRecord(ctx, rr, ser)
+			events, err = UnpackRecord(ctx, rr, ser)
 			if err != nil {
 				t.Fatal("expect err be nil, got", err)
 			}

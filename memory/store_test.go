@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/ln80/event-store/testutil"
+	"github.com/ln80/event-store/internal/testutil"
 )
 
 func TestEventStore(t *testing.T) {

@@ -7,6 +7,7 @@ import (
 
 	es "github.com/ln80/event-store"
 	"github.com/ln80/event-store/event"
+	event_errors "github.com/ln80/event-store/event/errors"
 	"github.com/ln80/event-store/event/sourcing"
 	"github.com/ln80/pii"
 )
@@ -38,7 +39,7 @@ func makePtr(value any) any {
 }
 
 // Append implements EventStore
-func (s *Decorator) Append(ctx context.Context, id event.StreamID, events []event.Envelope, optFns ...func(*event.AppendOptions)) error {
+func (s *Decorator) Append(ctx context.Context, id event.StreamID, events []event.Envelope, opts ...func(*event.AppendConfig)) error {
 	p, _ := s.encryptor.Instance(id.GlobalID())
 
 	fn := func(ctx context.Context, evts ...any) ([]any, error) {
@@ -56,10 +57,10 @@ func (s *Decorator) Append(ctx context.Context, id event.StreamID, events []even
 	}
 
 	if err := event.Transform(ctx, events, fn); err != nil {
-		return event.Err(event.ErrAppendEventsFailed, id.String(), err)
+		return event_errors.Err(event.ErrAppendEventsFailed, id.String(), err)
 	}
 
-	return s.store.Append(ctx, id, events, optFns...)
+	return s.store.Append(ctx, id, events, opts...)
 }
 
 // Load implements EventStore
@@ -86,7 +87,7 @@ func (s *Decorator) Load(ctx context.Context, id event.StreamID, trange ...time.
 		return nil, err
 	}
 	if err := event.Transform(ctx, events, fn); err != nil {
-		return nil, event.Err(event.ErrLoadEventFailed, id.String(), err)
+		return nil, event_errors.Err(event.ErrLoadEventFailed, id.String(), err)
 	}
 
 	return events, nil
@@ -127,7 +128,7 @@ func (s *Decorator) Replay(ctx context.Context, stmID event.StreamID, f event.St
 }
 
 // AppendToStream implements EventStore
-func (s *Decorator) AppendToStream(ctx context.Context, chunk sourcing.Stream, optFns ...func(*event.AppendOptions)) error {
+func (s *Decorator) AppendToStream(ctx context.Context, chunk sourcing.Stream, opts ...func(*event.AppendConfig)) error {
 	p, _ := s.encryptor.Instance(chunk.ID().GlobalID())
 	// fn := func(ctx context.Context, ptrs ...any) error {
 	// 	return p.Encrypt(ctx, ptrs...)
@@ -147,10 +148,10 @@ func (s *Decorator) AppendToStream(ctx context.Context, chunk sourcing.Stream, o
 	}
 
 	if err := event.Transform(ctx, chunk.Unwrap(), fn); err != nil {
-		return event.Err(event.ErrAppendEventsFailed, chunk.ID().GlobalID(), err)
+		return event_errors.Err(event.ErrAppendEventsFailed, chunk.ID().GlobalID(), err)
 	}
 
-	return s.store.AppendToStream(ctx, chunk, optFns...)
+	return s.store.AppendToStream(ctx, chunk, opts...)
 }
 
 // LoadStream implements EventStore
@@ -176,7 +177,7 @@ func (s *Decorator) LoadStream(ctx context.Context, id event.StreamID, vrange ..
 		return nil, err
 	}
 	if err := event.Transform(ctx, stm.Unwrap(), fn); err != nil {
-		return nil, event.Err(event.ErrLoadEventFailed, id.String(), err)
+		return nil, event_errors.Err(event.ErrLoadEventFailed, id.String(), err)
 	}
 
 	return stm, nil
