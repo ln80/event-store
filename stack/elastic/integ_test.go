@@ -1,6 +1,6 @@
-// go:build integ
+//go:build integ
 
-package main
+package elastic
 
 import (
 	"context"
