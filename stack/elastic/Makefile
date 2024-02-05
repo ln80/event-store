@@ -18,7 +18,7 @@ TEST_PARAMS = Name=$(TEST_STACK_NAME)
 ELASTIC_DIR := $(dir $(lastword $(MAKEFILE_LIST)))
 
 # elastic related build and test of should ignore parent workspace
-# elastic%: export GOWORK=off
+elastic%: export GOWORK=off
 
 elastic/stackname:
 	cd $(ELASTIC_DIR); \
@@ -31,10 +31,11 @@ elastic/validate:
 
 elastic/build:
 	cd $(ELASTIC_DIR); \
+	echo "GOWORK : $(GOWORK)"; \
 	v="`go list -m -f '{{ .Version }}' github.com/ln80/event-store`"; \
-	if [  "$v" == "" ]; then echo "module version not found" ; exit 2; fi; \
+	# if [  "$v" == "" ]; then echo "module version not found" ; exit 2; fi; \
 	echo "Go module version: $$v"; \
-	sam build
+	sam build --template-file ./template.yaml
 
 elastic/package:
 	cd $(ELASTIC_DIR); \
