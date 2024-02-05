@@ -50,6 +50,11 @@ Resources:
       Endpoint: !GetAtt ConsumerQueue.Arn
       RawMessageDelivery: true
 
+  DeadLetterTopic:
+    Type: AWS::SNS::Topic
+    Properties: 
+      TopicName: !Sub ${AWS::StackName}-dlq
+
   SchemaRegistry:
     Type: 'AWS::Glue::Registry'
     Properties:
@@ -61,8 +66,11 @@ Resources:
     Properties:
       Location: ./template.yaml
       Parameters:
-        Name: !Sub ${AWS::StackName}-event-store
+        Name: !Sub ${AWS::StackName}-eventStore
         ForwardSNSTopicArn: !Ref ConsumerTopic
+        IndexerDeadLetterTopicArn: !Ref DeadLetterTopic
+        ForwarderDeadLetterTopicArn: !Ref DeadLetterTopic
+
         EncodingFormat: "AVRO"
         AvroGlueSchemaRegistryName: !Sub ${AWS::StackName}-event-schema-registry
         Tracing: Active
