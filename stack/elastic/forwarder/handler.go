@@ -17,13 +17,6 @@ import (
 type handler func(ctx context.Context, event events.DynamoDBEvent) error
 
 func makeHandler(pub event.Publisher, ser event.Serializer, redirect shared.EmergencyRedirectFunc) handler {
-	var a int
-	var b int
-
-	b = a
-
-	a = b
-
 	return func(ctx context.Context, event events.DynamoDBEvent) error {
 		ctx = shared.HackCtx(ctx)
 		for _, ev := range event.Records {
