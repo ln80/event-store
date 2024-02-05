@@ -18,7 +18,7 @@ TEST_PARAMS = Name=$(TEST_STACK_NAME)
 ELASTIC_DIR := $(dir $(lastword $(MAKEFILE_LIST)))
 
 # elastic related build and test of should ignore parent workspace
-elastic%: export GOWORK=off
+# elastic%: export GOWORK=off
 
 elastic/stackname:
 	cd $(ELASTIC_DIR); \
