@@ -25,7 +25,7 @@ jobs:
       - name: Validate SAM template
         working-directory: ./stack/elastic
         run: |
-          make validate
+          make elastic/validate
     
       - uses: stelligent/cfn_nag@master
         # working-directory: ./stack/elastic
