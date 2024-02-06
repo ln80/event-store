@@ -1,10 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 
-Transform:
-  # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/function-refs-in-policy-attributes.html
-  - AWS::LanguageExtensions
-  - AWS::Serverless-2016-10-31
-
+Transform: AWS::Serverless-2016-10-31
 
 Description: >
   SAM Template for elastic event store
@@ -21,7 +17,7 @@ Metadata:
     HomePageUrl: https://github.com/ln80/event-store
     SemanticVersion: 0.0.1
     SourceCodeUrl: https://github.com/ln80/event-store
-
+    Custom: ABC
 Parameters:
   Name:
     Type: String
@@ -105,11 +101,9 @@ Parameters:
 
   IndexerDeadLetterTopicArn: 
     Type: String
-    Default: ""
 
   ForwarderDeadLetterTopicArn: 
     Type: String
-    Default: ""
 
   EmergencyRedirectFifoTopicArn: 
     Type: String
@@ -213,10 +207,10 @@ Resources:
         
   EventTable:
     Type: AWS::DynamoDB::Table
-    DeletionPolicy: !If
-      - "MustRetainResource"
-      - "RetainExceptOnCreate" 
-      - "Delete"
+    # DeletionPolicy: !If
+    #   - "MustRetainResource"
+    #   - "RetainExceptOnCreate" 
+    #   - "Delete"
     Properties:
         DeletionProtectionEnabled: !If
           - "MustRetainResource"
@@ -281,12 +275,16 @@ Resources:
             BisectBatchOnFunctionError: false
             ParallelizationFactor: 1
             MaximumRetryAttempts: 1000
-            DestinationConfig: !If 
-                    - MustUseIndexerDeadLetter
-                    - OnFailure:
-                        Type: SNS
-                        Destination: !Ref IndexerDeadLetterTopicArn
-                    - !Ref AWS::NoValue
+            # DestinationConfig: !If 
+            #         - MustUseIndexerDeadLetter
+            #         - OnFailure:
+            #             Type: SNS
+            #             Destination: !Ref IndexerDeadLetterTopicArn
+            #         - !Ref AWS::NoValue
+            DestinationConfig:
+                OnFailure:
+                  Destination: !Ref IndexerDeadLetterTopicArn
+
             FilterCriteria:
               Filters:
                 - Pattern: '{"eventName": ["INSERT"], "dynamodb": { "Keys" : {"_pk": {"S": [{"anything-but": [ "internal" ]}]}}}}'
@@ -335,12 +333,9 @@ Resources:
               # MaximumRecordAgeInSeconds: -1
               # MaximumRetryAttempts: -1
               MaximumRetryAttempts: 1000
-              DestinationConfig: !If 
-                    - MustUseForwarderDeadLetter
-                    - OnFailure:
-                        Type: SNS
-                        Destination: !Ref ForwarderDeadLetterTopicArn
-                    - !Ref AWS::NoValue
+              DestinationConfig:
+                  OnFailure:
+                    Destination: !Ref ForwarderDeadLetterTopicArn
               FilterCriteria:
                 Filters:
                   - Pattern: '{"eventName": ["MODIFY"], "dynamodb": { "Keys" : {"_pk": {"S": [{"anything-but": [ "internal" ]}]}}}}'
@@ -374,7 +369,23 @@ Resources:
             - !Ref AWS::NoValue
           - !If
             - MustUseAvro
-            - AWSGlueSchemaRegistryReadonlyAccess
+            # - AWSGlueSchemaRegistryReadonlyAccess
+            - Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - "glue:GetRegistry"
+                    - "glue:ListRegistries"
+                    - "glue:GetSchema"
+                    - "glue:ListSchemas"
+                    - "glue:GetSchemaByDefinition"
+                    - "glue:GetSchemaVersion"
+                    - "glue:ListSchemaVersions"
+                    - "glue:GetSchemaVersionsDiff"
+                    - "glue:CheckSchemaVersionValidity"
+                    - "glue:QuerySchemaVersionMetadata"
+                    - "glue:GetTags"
+                  Resource: "*"
             - !Ref AWS::NoValue
         Environment:
             Variables:

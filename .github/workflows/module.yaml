@@ -3,9 +3,14 @@ name: Go Module
 on:
   push:
     branches: [main]
+    paths:
+      - '**'
+      - '!stack/**'
   pull_request:
     branches: [main]
-
+    paths:
+      - '**'
+      - '!stack/**'
 jobs:
   test:
     strategy:

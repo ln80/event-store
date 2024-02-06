@@ -1,6 +1,6 @@
-// go:build integ
+//go:build integ
 
-package main
+package elastic
 
 import (
 	"context"
@@ -29,6 +29,7 @@ import (
 func init() {
 	testutil.RegisterEvent("")
 
+	logger.SetDefault(logger.Discard())
 }
 
 func TestIntegration(t *testing.T) {
