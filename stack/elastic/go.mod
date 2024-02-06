@@ -14,7 +14,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sns v1.26.3
 	github.com/aws/aws-sdk-go-v2/service/sqs v1.29.3
 	github.com/aws/aws-xray-sdk-go v1.8.3
-	github.com/ln80/event-store v0.0.1
+	github.com/ln80/event-store v0.0.2
 )
 
 require (
@@ -51,7 +51,6 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/rs/xid v1.5.0 // indirect
 	github.com/rs/zerolog v1.31.0 // indirect
-	github.com/stretchr/testify v1.8.4 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasthttp v1.50.0 // indirect
 	golang.org/x/net v0.18.0 // indirect

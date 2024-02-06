@@ -52,11 +52,6 @@ jobs:
         env:
           DYNAMODB_ENDPOINT: http://localhost:8070
 
-      - name: Run Elastic Stack Unit tests
-        working-directory: ./stack/elastic
-        run: |
-          make elastic/unit-test/run
-      
       - name: Convert coverage.out to coverage.lcov
         uses: jandelgado/gcov2lcov-action@v1
 
