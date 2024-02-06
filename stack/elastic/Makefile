@@ -18,20 +18,18 @@ TEST_PARAMS = Name=$(TEST_STACK_NAME)
 ELASTIC_DIR := $(dir $(lastword $(MAKEFILE_LIST)))
 
 # elastic related build and test of should ignore parent workspace
-# elastic%: export GOWORK=off
+elastic%: export GOWORK=off
 
 elastic/stackname:
 	cd $(ELASTIC_DIR); \
 	echo $(TEST_STACK_NAME)
 
-# it fails at the moment; sam validate does not support "LanguageExpression" transform
 elastic/validate:
 	cd $(ELASTIC_DIR); \
 	sam validate
 
 elastic/build:
 	cd $(ELASTIC_DIR); \
-	echo "GOWORK : $(GOWORK)"; \
 	v="`go list -m -f '{{ .Version }}' github.com/ln80/event-store`"; \
 	# if [  "$v" == "" ]; then echo "module version not found" ; exit 2; fi; \
 	echo "Go module version: $$v"; \
@@ -50,18 +48,17 @@ elastic/publish:
 		sam publish --template packaged.yaml  --semantic-version $(v) --fail-on-same-version  --region $(AWS_REGION); \
 	fi
 
-
-elastic/deploy:
-	cd $(ELASTIC_DIR); \
-	sam deploy \
-		--no-confirm-changeset \
-		--no-fail-on-empty-changeset \
-		--stack-name $(TEST_STACK_NAME) \
-		--config-env $(TEST_ENV) \
-		--capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM \
-		--region $(TEST_REGION) \
-		--s3-bucket ln80-sam-pkgs \
-		--parameter-overrides $(TEST_PARAMS)
+# elastic/deploy:
+# 	cd $(ELASTIC_DIR); \
+# 	sam deploy \
+# 		--no-confirm-changeset \
+# 		--no-fail-on-empty-changeset \
+# 		--stack-name $(TEST_STACK_NAME) \
+# 		--config-env $(TEST_ENV) \
+# 		--capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM \
+# 		--region $(TEST_REGION) \
+# 		--s3-bucket ln80-sam-pkgs \
+# 		--parameter-overrides $(TEST_PARAMS)
 
 
 

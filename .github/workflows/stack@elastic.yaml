@@ -44,6 +44,9 @@ jobs:
   
   unit-test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: stack/elastic
     steps:
       - uses: actions/checkout@v4
       
@@ -52,6 +55,10 @@ jobs:
         with:
           go-version: "^1.21.x" 
       
+      - name: Install Go Dependencies
+        run: |
+          go mod tidy
+
       - name: Run unit tests
         working-directory: ./stack/elastic
         run: |
@@ -72,9 +79,9 @@ jobs:
         with:
           go-version: "^1.21.x" 
       
-      - uses: aws-actions/setup-sam@v2
-        with:
-          use-installer: true
+      - name: Install Go Dependencies
+        run: |
+          go mod tidy
 
       - uses: aws-actions/configure-aws-credentials@v2
         with:
@@ -82,50 +89,25 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-
-      # - name: Validate sam template
-      #   working-directory: ./stack/elastic
-      #   run: |
-      #     make validate
-      
-      # - name: Install Go dependencies
-      #   working-directory: ./stack/elastic
-      #   run: |
-      #     go mod tidy
-
-      # - name: Run unit tests
-      #   working-directory: ./stack/elastic
-      #   run: |
-      #     make elastic/unit-test/run
-        
-      # - name: Build stack
-      #   working-directory: ./stacks/elastic
-      #   run: |
-      #     make build
+      - uses: aws-actions/setup-sam@v2
+        with:
+          use-installer: true
 
       - name: Generate integ test stackname
         run: echo STACK_NAME=storer-elastic-test-$(date +%s) >> $GITHUB_ENV
-        # if: ${{ github.event_name == 'push' }}
       
       - name: Display integ test stackname
         run: echo ${{ env.STACK_NAME }}
-        # if: ${{ github.event_name == 'push' }}
 
       - name: Build integ tests
-        # working-directory: ./stacks/elastic
-        # if: ${{ github.event_name == 'push' }}
         run: |
           make elastic/integ-test/build
 
-      - name: Setup integ tests
-        # working-directory: ./stacks/elastic
-        # if: ${{ github.event_name == 'push' }}
+      - name: Deploy integ tests
         run: |
           make elastic/integ-test/deploy
 
       - name: Run integ tests
-        # working-directory: ./stacks/elastic
-        # if: ${{ github.event_name == 'push' }}
         run: |
           make elastic/integ-test/run
 
@@ -134,8 +116,8 @@ jobs:
           make elastic/integ-test/clear
 
   release:
-    needs: [ unit-test, cfn-test ]
-    # if: startsWith(github.ref, 'refs/tags/stack/elastic/v')
+    needs: [ integ-test ]
+    if: startsWith(github.ref, 'refs/tags/stack/elastic/v')
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -148,9 +130,9 @@ jobs:
         with:
           go-version: "^1.21.x" 
       
-      - uses: aws-actions/setup-sam@v2
-        with:
-          use-installer: true
+      - name: Install Go Dependencies
+        run: |
+          go mod tidy
 
       - uses: aws-actions/configure-aws-credentials@v2
         with:
@@ -158,21 +140,23 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Set RELEASE_VERSION ENV var
-        # run: echo "RELEASE_VERSION=${GITHUB_REF:15}" >> $GITHUB_ENV
-        run: echo "RELEASE_VERSION=0.0.4-t" >> $GITHUB_ENV
+      - uses: aws-actions/setup-sam@v2
+        with:
+          use-installer: true
 
-      - name: Build Elastic Store
+      - name: Set RELEASE_VERSION ENV var
+        run: echo "RELEASE_VERSION=${GITHUB_REF:15}" >> $GITHUB_ENV
+      
+      - name: Build
         run: |
           make elastic/build
 
-      - name: Package Elastic Store
+      - name: Package
         run: |
           make elastic/package
 
-      - name: Publish Elastic Store to SAR
+      - name: Publish to SAR
         env:
           ELASTIC_VERSION: ${{ env.RELEASE_VERSION }}
         run: |
-          echo "Elastic Version: ${ELASTIC_VERSION}"
           make elastic/publish v="${ELASTIC_VERSION}"
