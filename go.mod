@@ -32,7 +32,7 @@ require (
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/klauspost/compress v1.17.2 // indirect
+	github.com/klauspost/compress v1.17.4 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.19 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
@@ -60,9 +60,7 @@ require (
 	github.com/go-logr/logr v1.3.0
 	github.com/go-logr/zerologr v1.2.3
 	github.com/google/uuid v1.4.0
-	github.com/hamba/avro/v2 v2.16.0
+	github.com/hamba/avro/v2 v2.19.0
 	github.com/mitchellh/copystructure v1.2.0
 	github.com/rs/zerolog v1.31.0
 )
-
-replace github.com/hamba/avro/v2 => github.com/redaLaanait/avro/v2 v2.0.0-20231217171426-7db00da94c9c
