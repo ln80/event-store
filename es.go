@@ -106,7 +106,3 @@ func SetDefaultLogger(log logr.Logger)
 //
 //go:linkname DiscardLogger github.com/ln80/event-store/internal/logger.Discard
 func DiscardLogger() logr.Logger
-
-func FOO() string {
-	return "FOOO"
-}
