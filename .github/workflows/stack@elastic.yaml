@@ -145,7 +145,7 @@ jobs:
           use-installer: true
 
       - name: Set RELEASE_VERSION ENV var
-        run: echo "RELEASE_VERSION=${GITHUB_REF:15}" >> $GITHUB_ENV
+        run: echo "RELEASE_VERSION=${GITHUB_REF:25}" >> $GITHUB_ENV
       
       - name: Build
         run: |
