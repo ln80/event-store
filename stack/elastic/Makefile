@@ -48,20 +48,6 @@ elastic/publish:
 		sam publish --template packaged.yaml  --semantic-version $(v) --fail-on-same-version  --region $(AWS_REGION); \
 	fi
 
-# elastic/deploy:
-# 	cd $(ELASTIC_DIR); \
-# 	sam deploy \
-# 		--no-confirm-changeset \
-# 		--no-fail-on-empty-changeset \
-# 		--stack-name $(TEST_STACK_NAME) \
-# 		--config-env $(TEST_ENV) \
-# 		--capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM \
-# 		--region $(TEST_REGION) \
-# 		--s3-bucket ln80-sam-pkgs \
-# 		--parameter-overrides $(TEST_PARAMS)
-
-
-
 # elastic/unit-test/run: export GOWORK=
 elastic/unit-test/run: 
 	cd $(ELASTIC_DIR); \
