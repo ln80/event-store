@@ -25,11 +25,14 @@ func TestEventSchema(t *testing.T) {
 
 	defer event.NewRegister("service1").Clear()
 
+	type ignore [0]bool
+
 	type ValueObject1 struct {
 		Uint32 uint32
 	}
 	type ValueObjectA struct {
-		Uint32_Changed uint32 `aliases:"Uint32"`
+		_              ignore `ev:",aliases=ValueObject1 VeryOldObject1"`
+		Uint32_Changed uint32 `ev:",aliases=Uint32"`
 	}
 
 	type ValueObject2 struct {
@@ -47,14 +50,15 @@ func TestEventSchema(t *testing.T) {
 		NestedObj1 ValueObject1
 	}
 	type EventA struct {
-		Int64_Changed int64  `aliases:"Int64"`
-		Bytes         []byte `aliases:"String"`
+		Int64_Changed int64  `ev:",aliases=Int64"`
+		Bytes         []byte `ev:",aliases=String"`
 		Float64_New   float64
 	}
 	type EventB struct {
+		_              ignore `ev:",aliases=Event2"`
 		Bool           bool
 		Array          []string
-		NestedObj1     ValueObjectA `recordAliases:"ValueObject1 VeryOldObject1"`
+		NestedObj1     ValueObjectA
 		NestedObj2_New ValueObject2
 	}
 
@@ -110,7 +114,6 @@ func TestEventSchema(t *testing.T) {
 		).
 		Set(
 			defEventB,
-			event.WithAliases("Event2"),
 		)
 	sch2, err := eventSchema(a, namespace)
 	if err != nil {

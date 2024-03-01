@@ -3,9 +3,9 @@ package avro
 import (
 	"context"
 	"errors"
+	"os"
 	"testing"
 
-	avro_memory "github.com/ln80/event-store/avro/memory"
 	"github.com/ln80/event-store/event"
 	"github.com/ln80/event-store/internal/testutil"
 )
@@ -15,7 +15,8 @@ func BenchmarkSerializer(b *testing.B) {
 
 	ctx := context.Background()
 
-	registry := avro_memory.NewRegistry()
+	dir := b.TempDir()
+	registry := NewFSRegistry(os.DirFS(dir), dir)
 
 	ser := NewEventSerializer(ctx, registry)
 	testutil.BenchmarkSerializer(b, ser)
@@ -40,11 +41,15 @@ func TestSerializer(t *testing.T) {
 
 		ctx = context.WithValue(ctx, event.ContextNamespaceKey, "service1")
 
-		registry := avro_memory.NewRegistry()
+		// f := afero.NewMemMapFs()
+
+		dir := t.TempDir()
+		registry := NewFSRegistry(os.DirFS(dir), dir)
 		// registry := avro_glue.NewRegistry("test_1", client)
 
 		ser := NewEventSerializer(ctx, registry, func(esc *EventSerializerConfig) {
 			esc.Namespace = "service1"
+			esc.PersistCurrentSchema = true
 		})
 
 		testutil.TestSerializer(t, ctx, ser)
@@ -53,8 +58,12 @@ func TestSerializer(t *testing.T) {
 	t.Run("without namespace", func(t *testing.T) {
 		testutil.RegisterEvent("")
 
-		registry := avro_memory.NewRegistry()
-		ser := NewEventSerializer(ctx, registry)
+		dir := t.TempDir()
+		registry := NewFSRegistry(os.DirFS(dir), dir)
+
+		ser := NewEventSerializer(ctx, registry, func(esc *EventSerializerConfig) {
+			esc.PersistCurrentSchema = true
+		})
 
 		testutil.TestSerializer(t, ctx, ser)
 	})
@@ -66,10 +75,13 @@ func TestSerializer_WithError(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("readonly", func(t *testing.T) {
-		registry := avro_memory.NewRegistry()
+
+		dir := t.TempDir()
+		registry := NewFSRegistry(os.DirFS(dir), dir)
 
 		ser := NewEventSerializer(ctx, registry, func(esc *EventSerializerConfig) {
 			esc.ReadOnly = true
+			esc.PersistCurrentSchema = true
 		})
 
 		_, err := ser.MarshalEvent(ctx, event.Wrap(ctx, event.NewStreamID("service1", "id"), testutil.GenEvents(1))[0])
@@ -83,9 +95,13 @@ func TestSerializer_WithError(t *testing.T) {
 	})
 
 	t.Run("empty event", func(t *testing.T) {
-		registry := avro_memory.NewRegistry()
 
-		ser := NewEventSerializer(ctx, registry)
+		dir := t.TempDir()
+		registry := NewFSRegistry(os.DirFS(dir), dir)
+
+		ser := NewEventSerializer(ctx, registry, func(esc *EventSerializerConfig) {
+			esc.PersistCurrentSchema = true
+		})
 
 		_, err := ser.MarshalEvent(ctx, nil)
 		if want, got := event.ErrMarshalEmptyEvent, err; !errors.Is(got, want) {
@@ -98,10 +114,13 @@ func TestSerializer_WithError(t *testing.T) {
 	})
 
 	t.Run("skip current schema", func(t *testing.T) {
-		registry := avro_memory.NewRegistry()
+
+		dir := t.TempDir()
+		registry := NewFSRegistry(os.DirFS(dir), dir)
 
 		ser := NewEventSerializer(ctx, registry, func(esc *EventSerializerConfig) {
 			esc.SkipCurrentSchema = true
+			// esc.PersistCurrentSchema = true
 		})
 
 		_, err := ser.MarshalEvent(ctx, event.Wrap(ctx, event.NewStreamID("service1", "id"), testutil.GenEvents(1))[0])

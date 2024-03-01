@@ -56,7 +56,7 @@ type avroEvent struct {
 	FTTL              time.Duration `avro:"TTL"`
 
 	// make sure to put data as last field for future partial decoding (using a sub-schema)
-	FRawEvent any `avro:"Data" schema:"union"`
+	FRawEvent any `avro:"Data" ev:",inject=union"`
 
 	// schemaID used by avro registries to allow re-encoding the event using the same schema.
 	avroSchemaID string
