@@ -154,6 +154,7 @@ func (e *JobExecuter) Execute(ctx context.Context) error {
 	e.printer.Message("\n", nil)
 
 	for i, t := range e.tasks {
+		t := t
 		if e.done[t.Name()] {
 			continue
 		}

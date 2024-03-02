@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -24,7 +25,7 @@ func (p *Adapter) Persist(ctx context.Context, schema *avro.RecordSchema, opts .
 	dir := p.dir + "/" + namespace
 
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0750); err != nil {
 			return "", err
 		}
 	}
@@ -65,7 +66,8 @@ func (p *Adapter) Persist(ctx context.Context, schema *avro.RecordSchema, opts .
 		return "", err
 	}
 
-	file, err := os.Create(dir + "/" + strconv.Itoa(version) + "@" + id + ".json")
+	path := filepath.Clean(filepath.Join(dir, strconv.Itoa(version)+"@"+id+".json"))
+	file, err := os.Create(path)
 	if err != nil {
 		return "", err
 	}

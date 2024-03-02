@@ -7,11 +7,12 @@ import (
 	"html/template"
 	"os"
 	"os/exec"
+	"path/filepath"
 )
 
 func CheckDir(dir string) error {
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0750); err != nil {
 			return err
 		}
 	}
@@ -51,7 +52,7 @@ func RenderCode(tmpl *template.Template, data any) ([]byte, error) {
 }
 
 func WriteToFile(path string, b []byte) error {
-	file, err := os.Create(path)
+	file, err := os.Create(filepath.Clean(path))
 	if err != nil {
 		return err
 	}

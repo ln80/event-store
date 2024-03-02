@@ -64,8 +64,6 @@ func validateStreamID(streamID StreamID) error {
 
 // NewStreamID returns a composed event stream ID.
 // It panics if the global stream ID or parts are not alphanumeric,"-","_","+"
-//
-// Deprecated: use MustStreamID instead.
 func NewStreamID(global string, parts ...string) StreamID {
 	streamID, err := newStreamID(global, parts...)
 	if err != nil {
