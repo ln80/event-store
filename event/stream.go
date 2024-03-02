@@ -20,7 +20,7 @@ var (
 	ErrInvalidCursor   = errors.New("invalid cursor")
 )
 
-var streamIDRegex = regexp.MustCompile("^[a-zA-Z0-9-_+]+$")
+var streamIDRegex = regexp.MustCompile("^[a-zA-Z0-9-_#+@]+$")
 
 // StreamID presents a composed event stream ID, the global part identifies the global stream ex: TenantID.
 // While the other parts can identify the service, bounded context, or the root entity, etc
@@ -64,7 +64,20 @@ func validateStreamID(streamID StreamID) error {
 
 // NewStreamID returns a composed event stream ID.
 // It panics if the global stream ID or parts are not alphanumeric,"-","_","+"
+//
+// Deprecated: use MustStreamID instead.
 func NewStreamID(global string, parts ...string) StreamID {
+	streamID, err := newStreamID(global, parts...)
+	if err != nil {
+		panic(err)
+	}
+
+	return streamID
+}
+
+// NewStreamID returns a composed event stream ID.
+// It panics if the global stream ID or parts are not alphanumeric ex:"-","_","+"
+func MustStreamID(global string, parts ...string) StreamID {
 	streamID, err := newStreamID(global, parts...)
 	if err != nil {
 		panic(err)
