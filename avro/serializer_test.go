@@ -120,7 +120,6 @@ func TestSerializer_WithError(t *testing.T) {
 
 		ser := NewEventSerializer(ctx, registry, func(esc *EventSerializerConfig) {
 			esc.SkipCurrentSchema = true
-			// esc.PersistCurrentSchema = true
 		})
 
 		_, err := ser.MarshalEvent(ctx, event.Wrap(ctx, event.NewStreamID("service1", "id"), testutil.GenEvents(1))[0])

@@ -16,8 +16,6 @@ var (
 )
 
 type EventSerializer struct {
-	// registry Registry
-
 	registry *registry.Registry
 
 	cfg *EventSerializerConfig
@@ -197,10 +195,6 @@ func (s *EventSerializer) UnmarshalEvent(ctx context.Context, b []byte) (event.E
 // UnmarshalEventBatch implements event.Serializer.
 func (s *EventSerializer) UnmarshalEventBatch(ctx context.Context, b []byte) ([]event.Envelope, error) {
 	avroEvents := []avroEvent{}
-
-	// if err := s.registry.UnmarshalBatch(ctx, b, &avroEvents); err != nil {
-	// 	return nil, err
-	// }
 
 	id, b, err := s.registry.ExtractSchemaID(b)
 	if err != nil {

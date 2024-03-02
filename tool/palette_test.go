@@ -17,7 +17,7 @@ import (
 	"github.com/ln80/event-store/tool/internal"
 )
 
-func TestXxx(t *testing.T) {
+func TestExample(t *testing.T) {
 
 	ctx := context.Background()
 	if ctx == nil {
@@ -48,18 +48,13 @@ func TestXxx(t *testing.T) {
 
 	p.SetPrinter(&internal.DefaultPrinter{Output: os.Stdout, Err: os.Stdout})
 
-	type AccountCreated3 struct {
-		_      [0]string `ev:",aliases=AccountCreated AccountCreated2"`
-		ID     string
-		Desc   string
-		Status string
-		Titre  string
-		X      string
+	type AccountCreatedV3 struct {
+		_    [0]string `ev:",aliases=AccountCreated AccountCreated2"`
+		ID   string
+		Desc string
 	}
 
-	event.NewRegister("accounting").Set(AccountCreated3{
-		Status: "pending",
-	})
+	event.NewRegister("accounting").Set(AccountCreatedV3{})
 
 	var dirPersister registry.Persister = avro_fs.NewDirAdapter("./repo2")
 
