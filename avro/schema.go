@@ -226,7 +226,10 @@ func schemaOf(t reflect.Type, opts ...func(*schemaConfig)) (avro.Schema, error) 
 					ft = ft.Elem()
 				}
 				if ft.Kind() == reflect.Struct {
-					as, err := schemaOf(ft, childOpt)
+					as, err := schemaOf(ft, childOpt, func(sc *schemaConfig) {
+						// it would be nice to pass down a sub map that only contains anonymous struct fields
+						sc.def = cfg.def
+					})
 					if err != nil {
 						return nil, err
 					}
@@ -278,7 +281,6 @@ func schemaOf(t reflect.Type, opts ...func(*schemaConfig)) (avro.Schema, error) 
 			}
 
 			avroFieldOpts := make([]avro.SchemaOption, 0)
-
 			var fDef any
 			if def, ok := cfg.def.(map[string]any); ok {
 				d, ok := def[fName]

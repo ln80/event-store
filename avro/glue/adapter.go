@@ -48,7 +48,7 @@ func (r *Adapter) List(ctx context.Context, namespaces []string) ([]string, erro
 	}
 
 	query := func(ctx context.Context, input *glue.ListSchemasInput) (*glue.ListSchemasOutput, error) {
-		return r.client.(*glue.Client).ListSchemas(ctx, input)
+		return r.client.ListSchemas(ctx, input)
 	}
 
 	result := make([]string, 0)
@@ -119,7 +119,7 @@ func (r *Adapter) Walk(ctx context.Context, fn func(id string, number int64, lat
 	}
 
 	query := func(ctx context.Context, input *glue.ListSchemaVersionsInput) (*glue.ListSchemaVersionsOutput, error) {
-		return r.client.(*glue.Client).ListSchemaVersions(ctx, input)
+		return r.client.ListSchemaVersions(ctx, input)
 	}
 
 	n := 0

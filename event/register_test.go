@@ -3,6 +3,7 @@ package event
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/ln80/event-store/event/testutil"
@@ -121,9 +122,15 @@ func TestRegister_All(t *testing.T) {
 		if want, got := "evt_1", entry.Property("aliases").([]string)[0]; want != got {
 			t.Fatalf("expect %v, %v be equals", want, got)
 		}
+		if want, got := TypeOfWithNamespace(namespace, evt1), entry.Name(); want != got {
+			t.Fatalf("expect %v, %v be equals", want, got)
+		}
 		if want, got := "custom", entry.Property("custom").(string); want != got {
 			t.Fatalf("expect %v, %v be equals", want, got)
 		}
-		break
+	}
+
+	if want, got := []string{namespace}, NewRegister("").Namespaces(); !reflect.DeepEqual(want, got) {
+		t.Fatalf("expect %v,%v be equals", want, got)
 	}
 }
