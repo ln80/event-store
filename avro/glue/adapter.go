@@ -211,7 +211,6 @@ func (f *Adapter) GetByDefinition(ctx context.Context, schema avro.Schema) (stri
 		return "", err
 	}
 
-	// sch := avro.ParseBytes([]byte(aws.ToString(out.)))
 	id := aws.ToString(out.SchemaVersionId)
 	if out.Status != types.SchemaVersionStatusAvailable {
 		get := func(ctx context.Context) (*glue.GetSchemaVersionOutput, error) {
@@ -222,7 +221,6 @@ func (f *Adapter) GetByDefinition(ctx context.Context, schema avro.Schema) (stri
 		retryable := func(out *glue.GetSchemaVersionOutput) bool {
 			return out.Status == types.SchemaVersionStatusPending
 		}
-
 		out, err := wait(ctx, get, retryable)
 		if err != nil {
 			return "", fmt.Errorf("failed to get schema %v: %w", id, err)

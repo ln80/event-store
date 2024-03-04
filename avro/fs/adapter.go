@@ -79,10 +79,6 @@ func (p *Adapter) Persist(ctx context.Context, schema *avro.RecordSchema, opts .
 			if len(matches) > 0 {
 				sort.Strings(matches)
 				latest := matches[len(matches)-1]
-				// splits := strings.Split(latest, "/")
-				// splits = strings.Split(splits[len(splits)-1], "@")
-				// prev, _ := strconv.Atoi(splits[0])
-				// version = prev + 1
 
 				var prev int64
 				prev, _, _, err = parseSchemaPath(latest)

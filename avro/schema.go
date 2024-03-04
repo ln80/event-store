@@ -14,6 +14,10 @@ import (
 
 type SchemaMap map[string]avro.Schema
 
+// UnpackEventSchemas expects to receive the schema of the event envelope
+// and returns the wrapped event types' schemas.
+//
+// It fails if the given schema type and sub-types are not as expected
 func UnpackEventSchemas(schema *avro.RecordSchema) ([]*avro.RecordSchema, error) {
 	schemas := make([]*avro.RecordSchema, 0)
 	for _, f := range schema.Fields() {
@@ -35,6 +39,8 @@ func UnpackEventSchemas(schema *avro.RecordSchema) ([]*avro.RecordSchema, error)
 	return schemas, nil
 }
 
+// EventSchemas generate schema for each given namespace or all the registered namespace in the event registry.
+// It returns a map of schemas where the key is the namespace.
 func EventSchemas(a avro.API, namespaces []string) (SchemaMap, error) {
 	if len(namespaces) == 0 {
 		namespaces = event.NewRegister("").Namespaces()
