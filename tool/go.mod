@@ -5,7 +5,7 @@ go 1.20
 require (
 	github.com/aws/aws-sdk-go-v2/config v1.25.12
 	github.com/hamba/avro/v2 v2.19.0
-	github.com/ln80/event-store v0.0.2
+	github.com/ln80/event-store v0.0.3
 )
 
 require (

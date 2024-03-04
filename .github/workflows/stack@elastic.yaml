@@ -68,6 +68,17 @@ jobs:
     environment: test
     needs: [ unit-test, cfn-test ]
     runs-on: ubuntu-latest
+
+    services:
+      xray-daemon:
+        image: amazon/aws-xray-daemon
+        ports:
+          - 2000:2000
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+
     defaults:
       run:
         working-directory: stack/elastic
