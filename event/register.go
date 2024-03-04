@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"sort"
 	"strings"
 	"sync"
 
@@ -27,16 +28,21 @@ func WithAliases(aliases ...string) func(registryEntryProps) {
 }
 
 type registryEntry struct {
+	name  string
 	typ   reflect.Type
 	def   any
 	props registryEntryProps
 }
 
-func newRegistryEntry(typ reflect.Type,
+func newRegistryEntry(name string, typ reflect.Type,
 	def any,
 	props registryEntryProps) registryEntry {
 
-	return registryEntry{typ: typ, def: def, props: props}
+	return registryEntry{name: name, typ: typ, def: def, props: props}
+}
+
+func (re registryEntry) Name() string {
+	return re.name
 }
 
 func (re registryEntry) Type() reflect.Type {
@@ -74,10 +80,12 @@ type Register interface {
 
 	// All returns all registered events in the current namespace. It returns both event type and
 	// default value.
-	All() map[string]registryEntry
+	All() []registryEntry
 
 	// Clear all namespace registries. It's mainly used for internal tests
 	Clear()
+
+	Namespaces() []string
 }
 
 // register implement the Register interface
@@ -88,11 +96,23 @@ type register struct {
 }
 
 // All implements Register.
-func (r *register) All() map[string]registryEntry {
+func (r *register) All() []registryEntry {
 	regMu.Lock()
 	defer regMu.Unlock()
 
-	return registry[r.namespace]
+	arr := make([]registryEntry, len(registry[r.namespace]))
+
+	idx := 0
+	for _, e := range registry[r.namespace] {
+		arr[idx] = e
+		idx++
+	}
+
+	sort.Slice(arr, func(i, j int) bool {
+		return arr[i].Name() < arr[j].Name()
+	})
+
+	return arr
 }
 
 var _ Register = &register{}
@@ -139,7 +159,7 @@ func (r *register) Set(evt any, opts ...func(registryEntryProps)) Register {
 		}
 		opt(props)
 	}
-	registry[r.namespace][name] = newRegistryEntry(rType, evt, props)
+	registry[r.namespace][name] = newRegistryEntry(name, rType, evt, props)
 	return r
 }
 
@@ -193,4 +213,20 @@ func (r *register) Clear() {
 	defer regMu.Unlock()
 
 	registry = make(map[string]map[string]registryEntry)
+}
+
+// Namespaces implements Register.
+func (*register) Namespaces() []string {
+	regMu.Lock()
+	defer regMu.Unlock()
+
+	arr := make([]string, 0)
+	for k := range registry {
+		if k == "" {
+			continue
+		}
+		arr = append(arr, k)
+	}
+
+	return arr
 }

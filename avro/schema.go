@@ -2,9 +2,9 @@ package avro
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
-	"sort"
 	"strings"
 	"time"
 
@@ -12,80 +12,120 @@ import (
 	"github.com/ln80/event-store/event"
 )
 
-var typeOfBytes = reflect.TypeOf([]byte(nil))
+type SchemaMap map[string]avro.Schema
 
-// eventSchema returns the avro schema of the Avro event envelope.
-// The generated schema uses union to describe every domain event registered
-// under the given namespace in the event registry.
-func eventSchema(a avro.API, namespace string) (avro.Schema, error) {
+// UnpackEventSchemas expects to receive the schema of the event envelope
+// and returns the wrapped event types' schemas.
+//
+// It fails if the given schema type and sub-types are not as expected
+func UnpackEventSchemas(schema *avro.RecordSchema) ([]*avro.RecordSchema, error) {
+	schemas := make([]*avro.RecordSchema, 0)
+	for _, f := range schema.Fields() {
+		if f.Name() == "Data" {
+			sc := f.Type().(*avro.UnionSchema)
+			for _, t := range sc.Types() {
+				if t.Type() == avro.Null {
+					continue
+				}
+				tt, ok := t.(*avro.RecordSchema)
+				if !ok {
+					return nil, fmt.Errorf("event schema type must be a record, got %T", t)
+				}
+				schemas = append(schemas, tt)
+			}
+		}
+	}
+
+	return schemas, nil
+}
+
+// EventSchemas generate schema for each given namespace or all the registered namespace in the event registry.
+// It returns a map of schemas where the key is the namespace.
+func EventSchemas(a avro.API, namespaces []string) (SchemaMap, error) {
+	if len(namespaces) == 0 {
+		namespaces = event.NewRegister("").Namespaces()
+	}
+
+	currents := make(map[string]avro.Schema)
+	for _, n := range namespaces {
+		s, err := eventSchema(a, n)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate avro schema for '%s' events, err: %w", n, err)
+		}
+		currents[n] = s
+	}
+
+	return currents, nil
+}
+
+func eventSchema(a avro.API, namespace string) (*avro.RecordSchema, error) {
 	schemas := make([]avro.Schema, 0)
-	for t, entry := range event.NewRegister(namespace).All() {
-		def := entry.Default()
-		mapDef := map[string]any{}
-		defVal := reflect.ValueOf(def)
-		if defVal.CanAddr() {
-			defVal = defVal.Elem()
-		}
-		if !defVal.IsZero() {
-			// decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
-			// 	TagName: "avro",
-			// 	Result:  &mapDef,
-			// 	// DecodeHook: ,
-			// })
-			// if err != nil {
-			// 	return nil, err
-			// }
-			// err = decoder.Decode(def)
-			// if err != nil {
-			// 	return nil, err
-			// }
+	cache := make(seenCache)
 
-			// using mapstructure might be much performant but
-			// json-based struct-to-map result is much more compatible with "hamba/avro" parsed default values
-			b, err := json.Marshal(def)
-			if err != nil {
-				return nil, err
-			}
-			err = json.Unmarshal(b, &mapDef)
-			if err != nil {
-				return nil, err
-			}
+	entries := event.NewRegister(namespace).All()
+	if len(entries) == 0 {
+		return nil, fmt.Errorf("events not found in '%s' registry", namespace)
+	}
+	for _, entry := range event.NewRegister(namespace).All() {
+		mapDef := map[string]any{}
+		b, err := json.Marshal(entry.Default())
+		if err != nil {
+			return nil, err
 		}
+		err = json.Unmarshal(b, &mapDef)
+		if err != nil {
+			return nil, err
+		}
+		aliases := make([]string, 0)
+		if as := entry.Property("aliases"); as != nil {
+			aliases = append(aliases, as.([]string)...)
+		}
+		aliases = structTypeAliases(entry.Type(), aliases)
+
 		sch, err := schemaOf(entry.Type(), func(sc *schemaConfig) {
-			sc.name = t
+			sc.name = entry.Name()
+			sc.namespace = namespace
 			if len(mapDef) > 0 {
 				sc.def = mapDef
 			}
-			if aliases := entry.Property("aliases"); aliases != nil {
-				sc.aliases = aliases.([]string)
-			}
+			sc.aliases = aliases
+			sc.cache = cache
 		})
 		if err != nil {
 			return nil, err
 		}
 		schemas = append(schemas, sch)
 
-		a.Register(t, def)
+		a.Register(entry.Name(), entry.Default())
 	}
-	// make sure to preserve a deterministic order to avoid creating accidental new schema versions.
-	sort.Slice(schemas, func(i, j int) bool {
-		return schemas[i].(avro.NamedSchema).FullName() <= schemas[j].(avro.NamedSchema).FullName()
-	})
 	schemas = append([]avro.Schema{avro.NewPrimitiveSchema(avro.Null, nil)}, schemas...)
+
 	unionSch, err := avro.NewUnionSchema(schemas)
 	if err != nil {
 		return nil, err
 	}
 
-	return schemaOf(reflect.TypeOf(avroEvent{}), func(sc *schemaConfig) {
+	sc, err := schemaOf(reflect.TypeOf(avroEvent{}), func(sc *schemaConfig) {
 		sc.inject["union"] = unionSch
 		sc.namespace = namespace
 		if sc.namespace == "" {
-			sc.namespace = "global"
+			sc.namespace = "_"
 		}
 		sc.name = "events"
 	})
+	if err != nil {
+		return nil, err
+	}
+
+	schema, ok := sc.(*avro.RecordSchema)
+	if !ok {
+		return nil, fmt.Errorf("event schema type must be a record, got %T", sc)
+	}
+
+	return schema, nil
 }
+
+type seenCache map[string]avro.NamedSchema
 
 type schemaConfig struct {
 	name       string
@@ -94,9 +134,11 @@ type schemaConfig struct {
 	avroTagKey string
 	def        any
 	aliases    []string
+	cache      seenCache
 }
 
-// schemaOf convert a golang type, mainly a struct, to an avro schema
+var typeOfBytes = reflect.TypeOf([]byte(nil))
+
 func schemaOf(t reflect.Type, opts ...func(*schemaConfig)) (avro.Schema, error) {
 	cfg := &schemaConfig{
 		inject:     make(map[string]avro.Schema),
@@ -114,6 +156,7 @@ func schemaOf(t reflect.Type, opts ...func(*schemaConfig)) (avro.Schema, error) 
 		sc.avroTagKey = cfg.avroTagKey
 		sc.inject = cfg.inject
 		sc.namespace = cfg.namespace
+		sc.cache = cfg.cache
 	}
 
 	avroOpts := make([]avro.SchemaOption, 0)
@@ -182,17 +225,45 @@ func schemaOf(t reflect.Type, opts ...func(*schemaConfig)) (avro.Schema, error) 
 			if !f.IsExported() {
 				continue
 			}
+
+			if f.Anonymous {
+				ft := f.Type
+				if ft.Kind() == reflect.Pointer {
+					ft = ft.Elem()
+				}
+				if ft.Kind() == reflect.Struct {
+					as, err := schemaOf(ft, childOpt, func(sc *schemaConfig) {
+						// it would be nice to pass down a sub map that only contains anonymous struct fields
+						sc.def = cfg.def
+					})
+					if err != nil {
+						return nil, err
+					}
+					switch s := as.(type) {
+					case *avro.RecordSchema:
+						fields = append(fields, s.Fields()...)
+					case *avro.RefSchema:
+						fields = append(fields, s.Schema().(*avro.RecordSchema).Fields()...)
+					default:
+						return nil, errors.New("invalid anonymous field type schema")
+					}
+					continue
+				}
+
+				return nil, errors.New("invalid anonymous field type")
+			}
+
+			evName, evOpts := event.ParseTag(f.Tag)
+
 			var fs avro.Schema
-			if tag, ok := f.Tag.Lookup("schema"); ok {
-				if sch, ok := cfg.inject[tag]; ok {
+			if inject, ok := evOpts["inject"]; ok && len(inject) > 0 && inject[0] != "" {
+				if sch, ok := cfg.inject[inject[0]]; ok {
 					fs = sch
 				}
 			}
+
 			if fs == nil {
-				var aliases []string
-				if tag, ok := f.Tag.Lookup("recordAliases"); ok {
-					aliases = strings.Split(tag, " ")
-				}
+				aliases := structTypeAliases(f.Type, nil)
 				var err error
 				fs, err = schemaOf(f.Type, childOpt, func(sc *schemaConfig) {
 					if len(aliases) > 0 {
@@ -203,30 +274,30 @@ func schemaOf(t reflect.Type, opts ...func(*schemaConfig)) (avro.Schema, error) 
 					return nil, err
 				}
 			}
+
 			var fName string
 			if tag, ok := f.Tag.Lookup(cfg.avroTagKey); ok {
 				fName = tag
 			} else {
-				fName = f.Name
+				if evName != "" {
+					fName = evName
+				} else {
+					fName = f.Name
+				}
 			}
+
+			avroFieldOpts := make([]avro.SchemaOption, 0)
 			var fDef any
 			if def, ok := cfg.def.(map[string]any); ok {
 				d, ok := def[fName]
-				dv := reflect.ValueOf(d)
-				if dv.CanAddr() {
-					dv = dv.Elem()
-				}
-				if ok && d != nil && !dv.IsZero() {
+				if ok {
 					fDef = d
 				}
 			}
-			avroFieldOpts := make([]avro.SchemaOption, 0)
 			if fDef != nil {
 				avroFieldOpts = append(avroFieldOpts, avro.WithDefault(fDef))
 			}
-			var aliases []string
-			if tag, ok := f.Tag.Lookup("aliases"); ok {
-				aliases = strings.Split(tag, " ")
+			if aliases, ok := evOpts["aliases"]; ok {
 				if len(aliases) > 0 {
 					avroFieldOpts = append(avroFieldOpts, avro.WithAliases(aliases))
 				}
@@ -243,9 +314,62 @@ func schemaOf(t reflect.Type, opts ...func(*schemaConfig)) (avro.Schema, error) 
 		if name == "" {
 			name = strings.ReplaceAll(strings.Split(t.Name(), "[")[0], ".", "_")
 		}
-		return avro.NewRecordSchema(name, cfg.namespace, fields, avroOpts...)
 
+		fullName := name
+		if cfg.namespace != "" {
+			fullName = cfg.namespace + "." + fullName
+		}
+
+		if cfg.cache != nil {
+			if s, ok := cfg.cache[fullName]; ok {
+				return avro.NewRefSchema(s), nil
+			}
+		}
+
+		sh, err := avro.NewRecordSchema(name, cfg.namespace, fields, avroOpts...)
+		if err != nil {
+			return nil, err
+		}
+
+		if cfg.cache != nil {
+			cfg.cache[sh.FullName()] = sh
+		}
+
+		return sh, nil
 	default:
-		return nil, fmt.Errorf("unknown type %s %v", t.Kind().String(), t)
+		return nil, fmt.Errorf("event schema: unknown type %s %v", t.Kind().String(), t)
 	}
+}
+
+func structTypeAliases(t reflect.Type, defAliases []string) []string {
+	aliases := append([]string{}, defAliases...)
+	if t.Kind() != reflect.Struct {
+		return aliases
+	}
+
+	blankF, ok := t.FieldByName("_")
+	if !ok {
+		return aliases
+	}
+	_, evOpts := event.ParseTag(blankF.Tag)
+	evAls, ok := evOpts["aliases"]
+	if !ok {
+		return aliases
+
+	}
+
+	for _, a := range evAls {
+		found := false
+		for _, aa := range aliases {
+			if aa == a {
+				found = true
+				break
+			}
+		}
+		if !found {
+			aliases = append(aliases, a)
+		}
+	}
+
+	return aliases
 }

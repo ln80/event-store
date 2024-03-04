@@ -3,5 +3,5 @@ go 1.20
 use (
 	.
 	./stack/elastic
-// ./stacks/utils
+	./tool
 )

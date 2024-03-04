@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/hamba/avro/v2"
-	avro_registry "github.com/ln80/event-store/avro/registry"
+	"github.com/ln80/event-store/avro/registry"
 	"github.com/ln80/event-store/event"
 	"github.com/ln80/event-store/internal/logger"
 )
@@ -16,7 +16,7 @@ var (
 )
 
 type EventSerializer struct {
-	registry avro_registry.Registry
+	registry *registry.Registry
 
 	cfg *EventSerializerConfig
 }
@@ -25,12 +25,11 @@ type EventSerializerConfig struct {
 	ReadOnly  bool
 	Namespace string
 	// SkipCurrentSchema disables the generation of the current schema from registered event.
-	// In this case, marshaling & unmarshaling functions will attempt to resolve schema ID from event envelope,
-	// otherwise it fails.
-	SkipCurrentSchema bool
+	SkipCurrentSchema    bool
+	PersistCurrentSchema bool
 }
 
-func NewEventSerializer(ctx context.Context, registry avro_registry.Registry, opts ...func(*EventSerializerConfig)) *EventSerializer {
+func NewEventSerializer(ctx context.Context, r *registry.Registry, opts ...func(*EventSerializerConfig)) *EventSerializer {
 	cfg := &EventSerializerConfig{
 		ReadOnly: false,
 	}
@@ -49,7 +48,7 @@ func NewEventSerializer(ctx context.Context, registry avro_registry.Registry, op
 	log := logger.FromContext(ctx).WithName("avro").WithValues("namespace", cfg.Namespace)
 
 	if !cfg.SkipCurrentSchema {
-		sch, err = eventSchema(registry.API(), cfg.Namespace)
+		sch, err = eventSchema(r.API(), cfg.Namespace)
 		if err != nil {
 			log.Error(err, "Failed Avro schema generation")
 			panic(err)
@@ -57,15 +56,15 @@ func NewEventSerializer(ctx context.Context, registry avro_registry.Registry, op
 		log.V(1).Info("Generated Avro schema", "schema", sch.String())
 	}
 
-	if err := registry.Setup(ctx, sch, func(rc *avro_registry.RegistryConfig) {
-		rc.ReadOnly = cfg.ReadOnly
+	if err := r.Setup(ctx, sch, func(rc *registry.RegistryConfig) {
+		rc.PersistCurrent = cfg.PersistCurrentSchema
 	}); err != nil {
 		log.Error(err, "Failed to setup Avro registry")
 		panic(err)
 	}
 
 	return &EventSerializer{
-		registry: registry,
+		registry: r,
 		cfg:      cfg,
 	}
 }
@@ -99,7 +98,17 @@ func (s *EventSerializer) MarshalEvent(ctx context.Context, evt event.Envelope) 
 		return
 	}
 
-	b, err = s.registry.Marshal(ctx, avroEvt)
+	id, schema, _, err := s.registry.GetCurrent(ctx, avroEvt)
+	if err != nil {
+		return
+	}
+
+	b, err = s.registry.API().Marshal(schema, avroEvt)
+	if err != nil {
+		return
+	}
+
+	b, err = s.registry.AppendSchemaID(b, id)
 	if err != nil {
 		return
 	}
@@ -143,10 +152,21 @@ func (s *EventSerializer) MarshalEventBatch(ctx context.Context, events []event.
 		avroEvents[i] = *avroEvt
 	}
 
-	b, err = s.registry.MarshalBatch(ctx, avroEvents)
+	id, _, batchSchema, err := s.registry.GetCurrent(ctx, &avroEvents[0])
 	if err != nil {
 		return
 	}
+
+	b, err = s.registry.API().Marshal(batchSchema, avroEvents)
+	if err != nil {
+		return
+	}
+
+	b, err = s.registry.AppendSchemaID(b, id)
+	if err != nil {
+		return
+	}
+
 	return
 }
 
@@ -154,9 +174,19 @@ func (s *EventSerializer) MarshalEventBatch(ctx context.Context, events []event.
 func (s *EventSerializer) UnmarshalEvent(ctx context.Context, b []byte) (event.Envelope, error) {
 	avroEvt := avroEvent{}
 
-	if err := s.registry.Unmarshal(ctx, b, &avroEvt); err != nil {
+	id, b, err := s.registry.ExtractSchemaID(b)
+	if err != nil {
 		return nil, err
 	}
+	_, schema, _, err := s.registry.GetSchema(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.registry.API().Unmarshal(schema, b, &avroEvt); err != nil {
+		return nil, err
+	}
+
+	avroEvt.SetAVROSchemaID(id)
 	avroEvt.checkType(s.cfg.Namespace)
 
 	return &avroEvt, nil
@@ -166,15 +196,25 @@ func (s *EventSerializer) UnmarshalEvent(ctx context.Context, b []byte) (event.E
 func (s *EventSerializer) UnmarshalEventBatch(ctx context.Context, b []byte) ([]event.Envelope, error) {
 	avroEvents := []avroEvent{}
 
-	if err := s.registry.UnmarshalBatch(ctx, b, &avroEvents); err != nil {
+	id, b, err := s.registry.ExtractSchemaID(b)
+	if err != nil {
+		return nil, err
+	}
+	_, _, batchSchema, err := s.registry.GetSchema(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.registry.API().Unmarshal(batchSchema, b, &avroEvents); err != nil {
 		return nil, err
 	}
 
 	envs := make([]event.Envelope, len(avroEvents))
 	for i, avroEvt := range avroEvents {
 		avroEvt := avroEvt
+		avroEvt.SetAVROSchemaID(id)
 		avroEvt.checkType(s.cfg.Namespace)
 		envs[i] = &avroEvt
+
 	}
 	return envs, nil
 }

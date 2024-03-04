@@ -23,13 +23,17 @@ func TestEventSchema(t *testing.T) {
 	a := avro.Config{PartialUnionTypeResolution: false, UnionResolutionError: true}.Freeze()
 	namespace := "service1"
 
-	defer event.NewRegister("service1").Clear()
+	reg := event.NewRegister(namespace)
+	defer reg.Clear()
+
+	type ignore [0]bool
 
 	type ValueObject1 struct {
 		Uint32 uint32
 	}
 	type ValueObjectA struct {
-		Uint32_Changed uint32 `aliases:"Uint32"`
+		_              ignore `ev:",aliases=ValueObject1 VeryOldObject1"`
+		Uint32_Changed uint32 `ev:",aliases=Uint32"`
 	}
 
 	type ValueObject2 struct {
@@ -42,20 +46,21 @@ func TestEventSchema(t *testing.T) {
 		Bool   bool
 	}
 	type Event2 struct {
-		Bool       bool
-		Array      []string
-		NestedObj1 ValueObject1
+		Bool  bool
+		Array []string
+		Obj1  ValueObject1
 	}
 	type EventA struct {
-		Int64_Changed int64  `aliases:"Int64"`
-		Bytes         []byte `aliases:"String"`
+		Int64_Changed int64  `ev:",aliases=Int64"`
+		Bytes         []byte `ev:",aliases=String"`
 		Float64_New   float64
 	}
 	type EventB struct {
-		Bool           bool
-		Array          []string
-		NestedObj1     ValueObjectA `recordAliases:"ValueObject1 VeryOldObject1"`
-		NestedObj2_New ValueObject2
+		_     ignore `ev:",aliases=Event2"`
+		Bool  bool
+		Array []string
+		Obj1  ValueObjectA
+		ValueObject2
 	}
 
 	event.NewRegister(namespace).
@@ -73,7 +78,7 @@ func TestEventSchema(t *testing.T) {
 	evt2 := Event2{
 		Bool:  true,
 		Array: []string{"foo", "bar"},
-		NestedObj1: ValueObject1{
+		Obj1: ValueObject1{
 			Uint32: 20,
 		},
 	}
@@ -99,7 +104,7 @@ func TestEventSchema(t *testing.T) {
 		Float64_New: float64(40),
 	}
 	defEventB := EventB{
-		NestedObj2_New: ValueObject2{
+		ValueObject2: ValueObject2{
 			Time: Time(time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC)),
 		},
 	}
@@ -110,14 +115,13 @@ func TestEventSchema(t *testing.T) {
 		).
 		Set(
 			defEventB,
-			event.WithAliases("Event2"),
 		)
 	sch2, err := eventSchema(a, namespace)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	compat := avro.NewSchemaCompatibility()
+	compat := NewCompatibilityAPI()
 	r, err := compat.Resolve(sch2, sch1)
 	if err != nil {
 		t.Fatal(err)
@@ -153,10 +157,10 @@ func TestEventSchema(t *testing.T) {
 	if want, got := evt2.Array, rEvt2.Array; !reflect.DeepEqual(want, got) {
 		t.Fatalf("expect %+v, %+v be equals", want, got)
 	}
-	if want, got := evt2.NestedObj1.Uint32, rEvt2.NestedObj1.Uint32_Changed; !reflect.DeepEqual(want, got) {
+	if want, got := evt2.Obj1.Uint32, rEvt2.Obj1.Uint32_Changed; !reflect.DeepEqual(want, got) {
 		t.Fatalf("expect %+v, %+v be equals", want, got)
 	}
-	if want, got := defEventB.NestedObj2_New, rEvt2.NestedObj2_New; !reflect.DeepEqual(want, got) {
+	if want, got := defEventB.ValueObject2, rEvt2.ValueObject2; !reflect.DeepEqual(want, got) {
 		t.Fatalf("expect %+v, %+v be equals", want, got)
 	}
 
@@ -175,5 +179,44 @@ func TestEventSchema(t *testing.T) {
 	}
 	if want, got := event.TypeOfWithNamespace(namespace, &EventB{}), resultEvts[1].Type(); !reflect.DeepEqual(want, got) {
 		t.Fatalf("expect %+v, %+v be equals", want, got)
+	}
+}
+
+func TestPackUnpackEventSchemas(t *testing.T) {
+	a := NewAPI()
+
+	namespace := "service" + event.UID().String()
+
+	reg := event.NewRegister(namespace)
+	defer reg.Clear()
+
+	type Event1 struct{ ID string }
+	type Event2 struct{ ID string }
+
+	reg.Set(Event1{})
+	reg.Set(Event2{})
+
+	m, err := EventSchemas(a, []string{namespace})
+	if err != nil {
+		t.Fatal("expect err be nil, got", err)
+	}
+
+	schema, ok := m[namespace]
+	if !ok {
+		t.Fatalf("expect to find schema for namespace '%s'", namespace)
+	}
+
+	schemas, err := UnpackEventSchemas(schema.(*avro.RecordSchema))
+	if err != nil {
+		t.Fatal("expect err be nil, got", err)
+	}
+	if n := len(schemas); n != 2 {
+		t.Fatalf("expect to find two event schemas, found %v", n)
+	}
+	if want, got := namespace+".Event1", schemas[0].FullName(); want != got {
+		t.Fatalf("expect be equals %v,%v", want, got)
+	}
+	if want, got := namespace+".Event2", schemas[1].FullName(); want != got {
+		t.Fatalf("expect be equals %v,%v", want, got)
 	}
 }

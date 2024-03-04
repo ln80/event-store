@@ -8,7 +8,6 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 	appconfig "github.com/ln80/event-store/appconfig"
 	"github.com/ln80/event-store/avro"
-	"github.com/ln80/event-store/avro/glue"
 	"github.com/ln80/event-store/control"
 	"github.com/ln80/event-store/event"
 	"github.com/ln80/event-store/internal/logger"
@@ -39,11 +38,12 @@ func main() {
 	case "AVRO":
 		serializer = avro.NewEventSerializer(
 			context.Background(),
-			glue.NewRegistry(
+			avro.NewGlueRegistry(
 				shared.MustGetenv("AVRO_GLUE_SCHEMA_REGISTRY"),
 				shared.InitGlueClient(cfg),
 			),
 			func(esc *avro.EventSerializerConfig) {
+				esc.Namespace = ""
 				esc.SkipCurrentSchema = true
 			},
 		)

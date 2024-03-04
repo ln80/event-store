@@ -17,7 +17,7 @@ Metadata:
     HomePageUrl: https://github.com/ln80/event-store
     SemanticVersion: 0.0.1
     SourceCodeUrl: https://github.com/ln80/event-store
-    Custom: ABC
+
 Parameters:
   Name:
     Type: String
@@ -64,13 +64,6 @@ Parameters:
     Description: |
       EncodingFormat of events. It should be changed. Otherwise this might create some inconsistencies.
 
-  AvroGlueSchemaRegistryName:
-    Type: String
-    Default: ""
-    Description: |
-      AvroGlueSchemaRegistryName is the name of schema registry used by AVRO Event Serializer. 
-      It's Mainly used by forwarder to add global stream sequence to events before forwarding.
-  
   RetainResource:
     Type: String
     Default: "false"
@@ -113,18 +106,6 @@ Parameters:
       when indexing or forwarding are disabled by feature toggles.
   
 Rules:
-  ValidateAvroGlueSchemaRegistryName:
-    RuleCondition: !Equals 
-      - !Ref EncodingFormat
-      - "AVRO"
-    Assertions:
-      - Assert: !Not 
-          - !Equals 
-            - !Ref AvroGlueSchemaRegistryName
-            - ''
-        AssertDescription: |
-          AVRO Glue Schema Registry name is mandatory if Encoding format is "AVRO".
-  
   ValidateEmergencyRedirectTopic:
     RuleCondition: !Not
         - !Equals 
@@ -191,7 +172,11 @@ Globals:
         ENCODING_FORMAT: !Sub 
                 - "{{resolve:ssm:${ParameterName}}}"
                 - { ParameterName: !Ref EncodingFormatParameter }
-        AVRO_GLUE_SCHEMA_REGISTRY: !Ref AvroGlueSchemaRegistryName
+        # AVRO_GLUE_SCHEMA_REGISTRY: !Ref AvroGlueSchemaRegistryName
+        AVRO_GLUE_SCHEMA_REGISTRY: !If 
+          - MustUseAvro 
+          - !Sub ${Name}-event-schema-registry
+          - ""
         FEATURE_TOGGLES_CONFIG_PATH: !Ref FeatureTogglesConfigurationPath
         EMERGENCY_REDIRECT_FIFO_TOPIC:  !Ref EmergencyRedirectFifoTopicArn
 
@@ -204,7 +189,14 @@ Resources:
       Value: !Ref EncodingFormat
       Description: Events encoding format. It should not be updated after stack creation.
       AllowedPattern: "^[a-zA-Z]{1,10}$"
-        
+
+  SchemaRegistry:
+    Type: 'AWS::Glue::Registry'
+    Condition: MustUseAvro
+    Properties:
+      Description: 'Event Schema Registry'
+      Name: !Sub ${Name}-event-schema-registry
+
   EventTable:
     Type: AWS::DynamoDB::Table
     # DeletionPolicy: !If
@@ -275,12 +267,6 @@ Resources:
             BisectBatchOnFunctionError: false
             ParallelizationFactor: 1
             MaximumRetryAttempts: 1000
-            # DestinationConfig: !If 
-            #         - MustUseIndexerDeadLetter
-            #         - OnFailure:
-            #             Type: SNS
-            #             Destination: !Ref IndexerDeadLetterTopicArn
-            #         - !Ref AWS::NoValue
             DestinationConfig:
                 OnFailure:
                   Destination: !Ref IndexerDeadLetterTopicArn
@@ -414,7 +400,10 @@ Resources:
             Resource: !Ref EmergencyRedirectFifoTopicArn
       Roles: 
         - !Ref IndexerFunctionRole
-        - !Ref ForwarderFunctionRole
+        - !If 
+          - MustForward
+          - !Ref ForwarderFunctionRole
+          - !Ref AWS::NoValue
 
 Outputs:
   EventTable:
@@ -427,4 +416,14 @@ Outputs:
 
   ForwardFunctionName:
     Description: "Forwarder Lambda function"
-    Value: !Ref ForwarderFunction
+    Value: !If 
+          - MustForward
+          - !Ref ForwarderFunctionRole
+          - ""
+
+  AvroSchemaRegistry:
+      Description: "Avro Schema registry"
+      Value: !If 
+        - MustUseAvro
+        - !Sub ${Name}-event-schema-registry
+        - ""
