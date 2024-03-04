@@ -32,3 +32,7 @@ examples:
 
 
 include ./stack/elastic/Makefile
+
+
+tool/integ-test/run:
+	SCHEMA_REGISTRY_NAME=local-test-registry gotest --tags=integ -race -cover -v ./tool

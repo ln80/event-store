@@ -82,6 +82,11 @@ func NewJobExecuter(printer internal.TaskPrinter) *JobExecuter {
 	}
 }
 
+// GenerateSchemas generates schemas based on the registered events in the event registry.
+// It limits generation to the events of the given namespaces.
+// If namespaces are empty then it looks for events in all the registered namespaces.
+//
+// Note that it generates one schema per namespace.
 func (e *JobExecuter) GenerateSchemas(namespaces ...string) *JobExecuter {
 	if t := internal.TaskFrom[*GenerateSchemasTask](e.tasks); t != nil {
 		return e
@@ -98,6 +103,8 @@ func (e *JobExecuter) GenerateSchemas(namespaces ...string) *JobExecuter {
 	return e
 }
 
+// CheckCompatibility check the compatibility of the current generated schemas against their
+// previous versions if already exist.
 func (e *JobExecuter) CheckCompatibility(walker registry.Walker) *JobExecuter {
 	if t := internal.TaskFrom[*CheckCompatibilityTask](e.tasks); t != nil {
 		return e
@@ -111,6 +118,7 @@ func (e *JobExecuter) CheckCompatibility(walker registry.Walker) *JobExecuter {
 	return e
 }
 
+// PersistSchemas registers the current schemas version in the given registry.
 func (e *JobExecuter) PersistSchemas(fetcher registry.Fetcher, persister registry.Persister) *JobExecuter {
 	if t := internal.TaskFrom[*PersistSchemasTask](e.tasks); t != nil {
 		return e
@@ -124,6 +132,9 @@ func (e *JobExecuter) PersistSchemas(fetcher registry.Fetcher, persister registr
 	e.tasks = append(e.tasks, tt)
 	return e
 }
+
+// EmbedSchemas walks through the existing schemas in the registry and fetch each version
+// then persist it in the given persister registry.
 func (e *JobExecuter) EmbedSchemas(walker registry.Walker, persister registry.Persister, out, module string) *JobExecuter {
 	if t := internal.TaskFrom[*EmbedSchemasTask](e.tasks); t != nil {
 		return e
@@ -142,6 +153,7 @@ func (e *JobExecuter) EmbedSchemas(walker registry.Walker, persister registry.Pe
 	return e
 }
 
+// Execute the job registered tasks in a logical order.
 func (e *JobExecuter) Execute(ctx context.Context) error {
 	sort.Slice(e.tasks, func(i, j int) bool {
 		return score[e.tasks[i].Name()] <= score[e.tasks[j].Name()]
@@ -231,6 +243,16 @@ func (tt *GenerateSchemasTask) Run(ctx context.Context, deps ...any) error {
 }
 
 func (tt *CheckCompatibilityTask) Run(ctx context.Context, deps ...any) error {
+	if len(deps) < 1 {
+		return fmt.Errorf("failed to run '%s' dependency missing", tt.Name())
+	}
+	if _, ok := deps[0].(avro.SchemaMap); !ok {
+		return fmt.Errorf("failed to run '%s' invalid dependency type %T", tt.Name(), deps[0])
+	}
+	if tt.walker == nil {
+		return fmt.Errorf("failed to run '%s' walker not found", tt.Name())
+	}
+
 	schemas := deps[0].(avro.SchemaMap)
 
 	compat := avro.NewCompatibilityAPI()
@@ -258,6 +280,19 @@ func (tt *CheckCompatibilityTask) Run(ctx context.Context, deps ...any) error {
 }
 
 func (tt *PersistSchemasTask) Run(ctx context.Context, deps ...any) error {
+	if len(deps) < 1 {
+		return fmt.Errorf("failed to run '%s' dependency missing", tt.Name())
+	}
+	if _, ok := deps[0].(avro.SchemaMap); !ok {
+		return fmt.Errorf("failed to run '%s' invalid dependency type %T", tt.Name(), deps[0])
+	}
+	if tt.persister == nil {
+		return fmt.Errorf("failed to run '%s' persister not found", tt.Name())
+	}
+	if tt.fetcher == nil {
+		return fmt.Errorf("failed to run '%s' fetcher not found", tt.Name())
+	}
+
 	schemas := deps[0].(avro.SchemaMap)
 
 	for _, s := range schemas {
@@ -267,9 +302,9 @@ func (tt *PersistSchemasTask) Run(ctx context.Context, deps ...any) error {
 				if _, err := tt.persister.Persist(ctx, s.(*_avro.RecordSchema)); err != nil {
 					return err
 				}
-			} else {
-				return err
+				continue
 			}
+			return err
 		}
 	}
 
@@ -277,6 +312,16 @@ func (tt *PersistSchemasTask) Run(ctx context.Context, deps ...any) error {
 }
 
 func (tt *EmbedSchemasTask) Run(ctx context.Context, deps ...any) error {
+	if tt.persister == nil {
+		return fmt.Errorf("failed to run '%s' persister not found", tt.Name())
+	}
+	if tt.walker == nil {
+		return fmt.Errorf("failed to run '%s' walker not found", tt.Name())
+	}
+	if tt.dest.Out == "" {
+		return fmt.Errorf("failed to run '%s' destination output not found", tt.Name())
+	}
+
 	if err := internal.CheckDir(tt.dest.Out); err != nil {
 		return err
 	}

@@ -92,6 +92,7 @@ func (r *Adapter) List(ctx context.Context, namespaces []string) ([]string, erro
 
 var _ registry.Walker = &Adapter{}
 
+// Walk implements registry.Walker.
 func (r *Adapter) Walk(ctx context.Context, fn func(id string, number int64, latest bool, schema *avro.RecordSchema) error, opts ...func(*registry.WalkConfig)) (int, error) {
 	cfg := &registry.WalkConfig{
 		Namespaces: make([]string, 0),
@@ -140,7 +141,6 @@ func (r *Adapter) Walk(ctx context.Context, fn func(id string, number int64, lat
 		)
 
 		schemas := make([]types.SchemaVersionListItem, 0)
-
 		for p.HasMorePages() {
 			out, err := p.NextPage(ctx)
 			if err != nil {
@@ -153,7 +153,6 @@ func (r *Adapter) Walk(ctx context.Context, fn func(id string, number int64, lat
 				schemas = append(schemas, v)
 			}
 		}
-
 		sort.Slice(schemas, func(i, j int) bool {
 			return *schemas[i].VersionNumber < *schemas[j].VersionNumber
 		})
@@ -181,7 +180,7 @@ func (r *Adapter) Walk(ctx context.Context, fn func(id string, number int64, lat
 
 var _ registry.Fetcher = &Adapter{}
 
-// Get implements avro.Fetcher.
+// Get implements registry.Fetcher.
 func (f *Adapter) Get(ctx context.Context, id string) (string, error) {
 	out, err := f.client.GetSchemaVersion(ctx, &glue.GetSchemaVersionInput{
 		SchemaVersionId: aws.String(id),
@@ -193,7 +192,7 @@ func (f *Adapter) Get(ctx context.Context, id string) (string, error) {
 	return aws.ToString(out.SchemaDefinition), nil
 }
 
-// GetByDefinition implements avro.Fetcher.
+// GetByDefinition implements registry.Fetcher.
 func (f *Adapter) GetByDefinition(ctx context.Context, schema avro.Schema) (string, error) {
 	def, _ := schema.(*avro.RecordSchema).MarshalJSON()
 	out, err := f.client.GetSchemaByDefinition(ctx, &glue.GetSchemaByDefinitionInput{
@@ -238,7 +237,7 @@ func (f *Adapter) GetByDefinition(ctx context.Context, schema avro.Schema) (stri
 
 var _ registry.Persister = &Adapter{}
 
-// Persist implements avro.Persister.
+// Persist implements registry.Persister.
 func (p *Adapter) Persist(ctx context.Context, schema *avro.RecordSchema, opts ...func(*registry.PersistConfig)) (string, error) {
 	id, err := p.updateSchema(ctx, schema)
 	if err != nil {
@@ -276,17 +275,14 @@ func (p *Adapter) createSchema(ctx context.Context, schema avro.Schema) (string,
 	id := aws.ToString(out.SchemaVersionId)
 
 	if out.SchemaVersionStatus != types.SchemaVersionStatusAvailable {
-
 		get := func(ctx context.Context) (*glue.GetSchemaVersionOutput, error) {
 			return p.client.GetSchemaVersion(ctx, &glue.GetSchemaVersionInput{
 				SchemaVersionId: &id,
 			})
 		}
-
 		retryable := func(out *glue.GetSchemaVersionOutput) bool {
 			return out.Status == types.SchemaVersionStatusPending
 		}
-
 		out, err := wait(ctx, get, retryable)
 		if err != nil {
 			return "", fmt.Errorf("failed to create schema %v: %w", id, err)
@@ -322,7 +318,6 @@ func (p *Adapter) updateSchema(ctx context.Context, schema avro.Schema) (string,
 		retryable := func(out *glue.GetSchemaVersionOutput) bool {
 			return out.Status == types.SchemaVersionStatusPending
 		}
-
 		out, err := wait(ctx, get, retryable)
 		if err != nil {
 			return "", fmt.Errorf("failed to update schema %v: %w", id, err)

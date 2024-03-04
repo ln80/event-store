@@ -18,7 +18,6 @@ import (
 	"github.com/aws/aws-xray-sdk-go/xray"
 	es "github.com/ln80/event-store"
 	"github.com/ln80/event-store/avro"
-	"github.com/ln80/event-store/avro/glue"
 	"github.com/ln80/event-store/dynamodb"
 	"github.com/ln80/event-store/event"
 	"github.com/ln80/event-store/internal/logger"
@@ -94,12 +93,13 @@ func TestIntegration(t *testing.T) {
 
 	serializer := avro.NewEventSerializer(
 		ctx,
-		glue.NewRegistry(
+		avro.NewGlueRegistry(
 			registryName,
 			shared.InitGlueClient(cfg),
 		),
 		func(esc *avro.EventSerializerConfig) {
 			esc.Namespace = ""
+			esc.PersistCurrentSchema = true
 		},
 	)
 

@@ -43,6 +43,7 @@ func main() {
 				shared.InitGlueClient(cfg),
 			),
 			func(esc *avro.EventSerializerConfig) {
+				esc.Namespace = ""
 				esc.SkipCurrentSchema = true
 			},
 		)

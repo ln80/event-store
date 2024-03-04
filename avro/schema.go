@@ -352,12 +352,17 @@ func structTypeAliases(t reflect.Type, defAliases []string) []string {
 
 	}
 
-	dedup := strings.Join(aliases, ",")
 	for _, a := range evAls {
-		if strings.Contains(dedup, a) {
-			continue
+		found := false
+		for _, aa := range aliases {
+			if aa == a {
+				found = true
+				break
+			}
 		}
-		aliases = append(aliases, a)
+		if !found {
+			aliases = append(aliases, a)
+		}
 	}
 
 	return aliases
