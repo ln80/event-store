@@ -71,7 +71,7 @@ jobs:
 
     services:
       xray-daemon:
-        image: xray-daemon
+        image: amazon/aws-xray-daemon
         ports:
           - 2000:2000
         env:
