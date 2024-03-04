@@ -70,7 +70,7 @@ jobs:
     runs-on: ubuntu-latest
 
     services:
-      dynamodb:
+      xray-daemon:
         image: xray-daemon
         ports:
           - 2000:2000
