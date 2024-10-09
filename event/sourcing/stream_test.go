@@ -6,15 +6,14 @@ import (
 	"testing"
 
 	"github.com/ln80/event-store/event"
-	"github.com/ln80/event-store/event/testutil"
 )
 
 func TestStream(t *testing.T) {
 	ctx := context.Background()
 
 	events := []any{
-		&testutil.Event{Val: "1"},
-		&testutil.Event{Val: "2"},
+		&Event{Val: "1"},
+		&Event{Val: "2"},
 	}
 
 	stmID := event.NewStreamID("globalID")

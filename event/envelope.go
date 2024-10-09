@@ -293,5 +293,12 @@ func (e *envelope) SetNamespace(nspace string) Envelope {
 var _ Transformer = &envelope{}
 
 func (e *envelope) Transform(fn func(any) any) {
-	e.event = fn(e.event)
+	if e.event == nil {
+		return
+	}
+	newEvt := fn(e.event)
+	if newEvt == nil {
+		return
+	}
+	e.event = newEvt
 }

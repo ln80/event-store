@@ -8,7 +8,7 @@ import (
 	"github.com/hamba/avro/v2"
 	"github.com/ln80/event-store/avro/registry"
 	"github.com/ln80/event-store/event"
-	"github.com/ln80/event-store/internal/logger"
+	"github.com/ln80/event-store/logger"
 )
 
 var (
@@ -47,19 +47,22 @@ func NewEventSerializer(ctx context.Context, r *registry.Registry, opts ...func(
 
 	log := logger.FromContext(ctx).WithName("avro").WithValues("namespace", cfg.Namespace)
 
+	registerEventTypes(r.API(), cfg.Namespace)
+
 	if !cfg.SkipCurrentSchema {
 		sch, err = eventSchema(r.API(), cfg.Namespace)
 		if err != nil {
-			log.Error(err, "Failed Avro schema generation")
+			log.Error(err, "Failed AVRO schema generation")
 			panic(err)
 		}
-		log.V(1).Info("Generated Avro schema", "schema", sch.String())
+		log.V(3).Info("Generated AVRO schema", "schema", sch.String())
 	}
 
 	if err := r.Setup(ctx, sch, func(rc *registry.RegistryConfig) {
 		rc.PersistCurrent = cfg.PersistCurrentSchema
+		rc.ReadOnly = cfg.ReadOnly
 	}); err != nil {
-		log.Error(err, "Failed to setup Avro registry")
+		log.Error(err, "Failed to setup AVRO registry")
 		panic(err)
 	}
 

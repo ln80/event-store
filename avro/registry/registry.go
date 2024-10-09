@@ -56,6 +56,7 @@ type schemaEntry struct {
 type RegistryConfig struct {
 	Namespace      bool
 	PersistCurrent bool
+	ReadOnly       bool
 }
 
 type Registry struct {
@@ -142,6 +143,14 @@ func (r *Registry) Setup(ctx context.Context, schema avro.Schema, opts ...func(*
 		return nil
 	}
 
+	if r.cfg.ReadOnly {
+		r.current = &schemaEntry{
+			schema:      schema.(*avro.RecordSchema),
+			batchSchema: avro.NewArraySchema(schema),
+		}
+		return nil
+	}
+
 	id, err := r.getSchemaByDefinition(ctx, schema)
 	if err != nil {
 		if errors.Is(err, ErrSchemaNotFound) && r.cfg.PersistCurrent {
@@ -215,6 +224,11 @@ func (r *Registry) GetSchema(ctx context.Context, id string) (string, *avro.Reco
 
 	schema := avro.MustParse(out)
 	if r.current != nil {
+		// c, _ := avro.NewRecordSchema(schema.(avro.NamedSchema).Name(), schema.(avro.NamedSchema).Namespace(), r.current.schema.Fields())
+		// schema, err = r.compatibility.Resolve(c, schema)
+		// if err != nil {
+		// 	return "", nil, nil, err
+		// }
 		schema, err = r.compatibility.Resolve(r.current.schema, schema)
 		if err != nil {
 			return "", nil, nil, err

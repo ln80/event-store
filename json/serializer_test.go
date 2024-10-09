@@ -6,14 +6,14 @@ import (
 	"testing"
 
 	"github.com/ln80/event-store/event"
-	"github.com/ln80/event-store/internal/testutil"
+	"github.com/ln80/event-store/eventtest"
 )
 
 func BenchmarkSerializer(b *testing.B) {
-	testutil.RegisterEvent("")
+	eventtest.RegisterEvent("")
 
 	ser := NewEventSerializer("")
-	testutil.BenchmarkSerializer(b, ser)
+	eventtest.BenchmarkSerializer(b, ser)
 }
 
 func TestSerializer(t *testing.T) {
@@ -22,23 +22,23 @@ func TestSerializer(t *testing.T) {
 	// Note register event is mandatory for json serializer
 
 	t.Run("with namespace", func(t *testing.T) {
-		testutil.RegisterEvent("service1")
+		eventtest.RegisterEvent("service1")
 
 		ctx := context.WithValue(ctx, event.ContextNamespaceKey, "service1")
 		ser := NewEventSerializer("service1")
-		testutil.TestSerializer(t, ctx, ser)
+		eventtest.TestSerializer(t, ctx, ser)
 	})
 
 	t.Run("without namespace", func(t *testing.T) {
-		testutil.RegisterEvent("")
+		eventtest.RegisterEvent("")
 
 		ser := NewEventSerializer("")
-		testutil.TestSerializer(t, ctx, ser)
+		eventtest.TestSerializer(t, ctx, ser)
 	})
 }
 
 func TestSerializer_WithError(t *testing.T) {
-	testutil.RegisterEvent("")
+	eventtest.RegisterEvent("")
 
 	ctx := context.Background()
 

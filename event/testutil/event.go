@@ -1,4 +1,4 @@
-package testutil
+package testutilboo
 
 type Event struct{ Val string }
 

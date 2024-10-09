@@ -8,7 +8,7 @@ import (
 	appconfig "github.com/ln80/event-store/appconfig"
 	"github.com/ln80/event-store/control"
 	"github.com/ln80/event-store/dynamodb"
-	"github.com/ln80/event-store/internal/logger"
+	"github.com/ln80/event-store/logger"
 	"github.com/ln80/event-store/stack/elastic/shared"
 )
 

@@ -7,19 +7,19 @@ import (
 	"testing"
 
 	"github.com/ln80/event-store/event"
-	"github.com/ln80/event-store/internal/testutil"
+	"github.com/ln80/event-store/eventtest"
 )
 
 func BenchmarkSerializer(b *testing.B) {
-	testutil.RegisterEvent("")
+	eventtest.RegisterEvent("")
 
 	ctx := context.Background()
 
 	dir := b.TempDir()
-	registry := NewFSRegistry(os.DirFS(dir), dir)
+	registry := NewFSRegistry(os.DirFS(dir), func(fc *FSRegistryConfig) { fc.PersistDir = dir })
 
 	ser := NewEventSerializer(ctx, registry)
-	testutil.BenchmarkSerializer(b, ser)
+	eventtest.BenchmarkSerializer(b, ser)
 }
 
 func TestSerializer(t *testing.T) {
@@ -36,15 +36,15 @@ func TestSerializer(t *testing.T) {
 
 	t.Run("with namespace", func(t *testing.T) {
 		event.NewRegister("service1").
-			Set(&testutil.Event1{}, event.WithAliases("EventA", "EventAA")).
-			Set(&testutil.Event2{})
+			Set(&eventtest.Event1{}, event.WithAliases("EventA", "EventAA")).
+			Set(&eventtest.Event2{})
 
 		ctx = context.WithValue(ctx, event.ContextNamespaceKey, "service1")
 
 		// f := afero.NewMemMapFs()
 
 		dir := t.TempDir()
-		registry := NewFSRegistry(os.DirFS(dir), dir)
+		registry := NewFSRegistry(os.DirFS(dir), func(fc *FSRegistryConfig) { fc.PersistDir = dir })
 		// registry := avro_glue.NewRegistry("test_1", client)
 
 		ser := NewEventSerializer(ctx, registry, func(esc *EventSerializerConfig) {
@@ -52,43 +52,43 @@ func TestSerializer(t *testing.T) {
 			esc.PersistCurrentSchema = true
 		})
 
-		testutil.TestSerializer(t, ctx, ser)
+		eventtest.TestSerializer(t, ctx, ser)
 	})
 
 	t.Run("without namespace", func(t *testing.T) {
-		testutil.RegisterEvent("")
+		eventtest.RegisterEvent("")
 
 		dir := t.TempDir()
-		registry := NewFSRegistry(os.DirFS(dir), dir)
+		registry := NewFSRegistry(os.DirFS(dir), func(fc *FSRegistryConfig) { fc.PersistDir = dir })
 
 		ser := NewEventSerializer(ctx, registry, func(esc *EventSerializerConfig) {
 			esc.PersistCurrentSchema = true
 		})
 
-		testutil.TestSerializer(t, ctx, ser)
+		eventtest.TestSerializer(t, ctx, ser)
 	})
 }
 
 func TestSerializer_WithError(t *testing.T) {
-	testutil.RegisterEvent("")
+	eventtest.RegisterEvent("")
 
 	ctx := context.Background()
 
 	t.Run("readonly", func(t *testing.T) {
 
 		dir := t.TempDir()
-		registry := NewFSRegistry(os.DirFS(dir), dir)
+		registry := NewFSRegistry(os.DirFS(dir), func(fc *FSRegistryConfig) { fc.PersistDir = dir })
 
 		ser := NewEventSerializer(ctx, registry, func(esc *EventSerializerConfig) {
 			esc.ReadOnly = true
 			esc.PersistCurrentSchema = true
 		})
 
-		_, err := ser.MarshalEvent(ctx, event.Wrap(ctx, event.NewStreamID("service1", "id"), testutil.GenEvents(1))[0])
+		_, err := ser.MarshalEvent(ctx, event.Wrap(ctx, event.NewStreamID("service1", "id"), eventtest.GenEvents(1))[0])
 		if want, got := ErrReadOnlyModeEnabled, err; !errors.Is(got, want) {
 			t.Fatalf("expect %v, %v be equals", want, got)
 		}
-		_, err = ser.MarshalEventBatch(ctx, event.Wrap(ctx, event.NewStreamID("service1", "id"), testutil.GenEvents(1)))
+		_, err = ser.MarshalEventBatch(ctx, event.Wrap(ctx, event.NewStreamID("service1", "id"), eventtest.GenEvents(1)))
 		if want, got := ErrReadOnlyModeEnabled, err; !errors.Is(got, want) {
 			t.Fatalf("expect %v, %v be equals", want, got)
 		}
@@ -97,7 +97,7 @@ func TestSerializer_WithError(t *testing.T) {
 	t.Run("empty event", func(t *testing.T) {
 
 		dir := t.TempDir()
-		registry := NewFSRegistry(os.DirFS(dir), dir)
+		registry := NewFSRegistry(os.DirFS(dir), func(fc *FSRegistryConfig) { fc.PersistDir = dir })
 
 		ser := NewEventSerializer(ctx, registry, func(esc *EventSerializerConfig) {
 			esc.PersistCurrentSchema = true
@@ -116,17 +116,17 @@ func TestSerializer_WithError(t *testing.T) {
 	t.Run("skip current schema", func(t *testing.T) {
 
 		dir := t.TempDir()
-		registry := NewFSRegistry(os.DirFS(dir), dir)
+		registry := NewFSRegistry(os.DirFS(dir), func(fc *FSRegistryConfig) { fc.PersistDir = dir })
 
 		ser := NewEventSerializer(ctx, registry, func(esc *EventSerializerConfig) {
 			esc.SkipCurrentSchema = true
 		})
 
-		_, err := ser.MarshalEvent(ctx, event.Wrap(ctx, event.NewStreamID("service1", "id"), testutil.GenEvents(1))[0])
+		_, err := ser.MarshalEvent(ctx, event.Wrap(ctx, event.NewStreamID("service1", "id"), eventtest.GenEvents(1))[0])
 		if want, got := event.ErrMarshalEventFailed, err; !errors.Is(got, want) {
 			t.Fatalf("expect %v, %v be equals", want, got)
 		}
-		_, err = ser.MarshalEventBatch(ctx, event.Wrap(ctx, event.NewStreamID("service1", "id"), testutil.GenEvents(1)))
+		_, err = ser.MarshalEventBatch(ctx, event.Wrap(ctx, event.NewStreamID("service1", "id"), eventtest.GenEvents(1)))
 		if want, got := event.ErrMarshalEventFailed, err; !errors.Is(got, want) {
 			t.Fatalf("expect %v, %v be equals", want, got)
 		}

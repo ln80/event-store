@@ -4,8 +4,6 @@ import (
 	"context"
 	"reflect"
 	"testing"
-
-	"github.com/ln80/event-store/event/testutil"
 )
 
 type pubEvent struct{ Val string }
@@ -21,7 +19,7 @@ func TestPublisher_Destinations(t *testing.T) {
 	NewRegister("").Clear()
 	defer NewRegister("").Clear()
 
-	type Event2 struct{ Val string }
+	// type Event22 struct{ Val string }
 
 	NewRegister(namespace).
 		Set(pubEvent{}).
@@ -36,9 +34,9 @@ func TestPublisher_Destinations(t *testing.T) {
 
 	// force the use of global registry as fallback
 	NewRegister("").
-		Set(testutil.Event2{})
+		Set(Event2{})
 
-	if want, got := (&testutil.Event2{}).EvDests(), publishDestinations(ctx, Event2{}); !reflect.DeepEqual(want, got) {
+	if want, got := (&Event2{}).EvDests(), publishDestinations(ctx, Event2{}); !reflect.DeepEqual(want, got) {
 		t.Fatalf("expect %v, %v be equals", want, got)
 	}
 }

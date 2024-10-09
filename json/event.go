@@ -2,11 +2,10 @@ package json
 
 import (
 	"encoding/json"
-	"reflect"
 	"time"
 
 	"github.com/ln80/event-store/event"
-	"github.com/ln80/event-store/internal/logger"
+	"github.com/ln80/event-store/logger"
 )
 
 var (
@@ -117,7 +116,8 @@ func (e *jsonEvent) Event() any {
 		e.fEvent = noEvent
 		return nil
 	}
-	e.fEvent = reflect.ValueOf(ptr).Elem().Interface()
+	// e.fEvent = reflect.ValueOf(ptr).Elem().Interface()
+	e.fEvent = ptr
 
 	return e.fEvent
 }
@@ -175,7 +175,12 @@ func (e *jsonEvent) SetGlobalVersion(v event.Version) event.Envelope {
 var _ event.Transformer = &jsonEvent{}
 
 func (e *jsonEvent) Transform(fn func(any) any) {
-	if e.Event() != nil {
-		e.fEvent = fn(e.fEvent)
+	if e.Event() == nil {
+		return
 	}
+	newEvt := fn(e.fEvent)
+	if newEvt == nil {
+		return
+	}
+	e.fEvent = newEvt
 }

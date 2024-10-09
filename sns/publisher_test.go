@@ -9,7 +9,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/ln80/event-store/event"
-	_ "github.com/ln80/event-store/internal/testutil"
+	_ "github.com/ln80/event-store/eventtest"
 )
 
 type event1 struct{ Val string }

@@ -4,17 +4,17 @@ import (
 	"context"
 	"testing"
 
-	"github.com/ln80/event-store/internal/testutil"
+	"github.com/ln80/event-store/eventtest"
 )
 
 func TestEventStore(t *testing.T) {
-	testutil.RegisterEvent("")
+	eventtest.RegisterEvent("")
 
 	ctx := context.Background()
 
-	testutil.TestEventLoggingStore(t, ctx, NewEventStore())
-	testutil.TestEventSourcingStore(t, ctx, NewEventStore())
-	testutil.TestEventStreamer(t, ctx, NewEventStore(), func(opt *testutil.TestEventStreamerOptions) {
+	eventtest.TestEventLoggingStore(t, ctx, NewEventStore())
+	eventtest.TestEventSourcingStore(t, ctx, NewEventStore())
+	eventtest.TestEventStreamer(t, ctx, NewEventStore(), func(opt *eventtest.TestEventStreamerOptions) {
 
 		opt.SupportOrderDESC = true
 	})

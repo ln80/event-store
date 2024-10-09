@@ -12,10 +12,11 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/expression"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/ln80/aws-toolkit-go/dynamodbtest"
 	"github.com/ln80/event-store/event"
 	event_errors "github.com/ln80/event-store/event/errors"
 	"github.com/ln80/event-store/event/sourcing"
-	"github.com/ln80/event-store/internal/testutil"
+	"github.com/ln80/event-store/eventtest"
 )
 
 func TestNewEventStore(t *testing.T) {
@@ -91,12 +92,15 @@ func TestEventStore_WithTx(t *testing.T) {
 		return input
 	}
 
-	withTable(t, dbsvc, func(table string) {
+	dynamodbtest.WithTables(t, dbsvc, dynamodbtest.TableConfig{
+		TableList: dynamodbtest.TableList(StoreCreateTableInput("table")),
+	}, func(dbsvc *dynamodb.Client, tableNames []string) {
+		table := tableNames[0]
 		store := NewEventStore(dbsvc, table)
 
 		t.Run("conflict", func(t *testing.T) {
 			streamID := event.NewStreamID(event.UID().String())
-			stm := sourcing.Wrap(ctx, streamID, event.VersionZero, testutil.GenEvents(5))
+			stm := sourcing.Wrap(ctx, streamID, event.VersionZero, eventtest.GenEvents(5))
 			err := store.AppendToStream(ctx, stm, func(opt *event.AppendConfig) {
 				opt.AddToTx = func(ctx context.Context) (items []any) {
 					item := addItem(table,
@@ -115,7 +119,7 @@ func TestEventStore_WithTx(t *testing.T) {
 		})
 		t.Run("success", func(t *testing.T) {
 			streamID := event.NewStreamID(event.UID().String())
-			stm := sourcing.Wrap(ctx, streamID, event.VersionZero, testutil.GenEvents(5))
+			stm := sourcing.Wrap(ctx, streamID, event.VersionZero, eventtest.GenEvents(5))
 			if err := store.AppendToStream(ctx, stm, func(opt *event.AppendConfig) {
 				items := []any{
 					addItem(table,
@@ -136,14 +140,18 @@ func TestEventStore_WithTx(t *testing.T) {
 func TestEventStore(t *testing.T) {
 	ctx := context.Background()
 
-	withTable(t, dbsvc, func(table string) {
-		testutil.TestEventLoggingStore(t, ctx, NewEventStore(dbsvc, table))
+	dynamodbtest.WithTables(t, dbsvc, dynamodbtest.TableConfig{
+		TableList: dynamodbtest.TableList(StoreCreateTableInput("table")),
+	}, func(dbsvc *dynamodb.Client, tableNames []string) {
+		table := tableNames[0]
 
-		testutil.TestEventSourcingStore(t, ctx, NewEventStore(dbsvc, table))
+		eventtest.TestEventLoggingStore(t, ctx, NewEventStore(dbsvc, table))
+
+		eventtest.TestEventSourcingStore(t, ctx, NewEventStore(dbsvc, table))
 
 		indexer := NewIndexer(dbsvc, table)
 
-		testutil.TestEventStreamer(t, ctx, NewEventStore(dbsvc, table), func(opt *testutil.TestEventStreamerOptions) {
+		eventtest.TestEventStreamer(t, ctx, NewEventStore(dbsvc, table), func(opt *eventtest.TestEventStreamerOptions) {
 			opt.SupportOrderDESC = true
 
 			// Do force the indexing of the last persisted record

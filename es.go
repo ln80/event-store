@@ -5,7 +5,7 @@ import (
 
 	_ "unsafe"
 
-	_ "github.com/ln80/event-store/internal/logger"
+	_ "github.com/ln80/event-store/logger"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -98,11 +98,11 @@ func NewElasticStore(dynamodbTable string, opts ...func(*ElasticStoreConfig)) Ev
 
 // SetDefaultLogger allows to override the internal default logger used by the library.
 //
-//go:linkname SetDefaultLogger github.com/ln80/event-store/internal/logger.SetDefault
+//go:linkname SetDefaultLogger github.com/ln80/event-store/logger.SetDefault
 func SetDefaultLogger(log logr.Logger)
 
 // DiscardLogger returns a mute logger. Pass the mute logger to 'SetDefaultLogger'
 // to disable library internal logging.
 //
-//go:linkname DiscardLogger github.com/ln80/event-store/internal/logger.Discard
+//go:linkname DiscardLogger github.com/ln80/event-store/logger.Discard
 func DiscardLogger() logr.Logger

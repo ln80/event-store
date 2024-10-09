@@ -3,20 +3,12 @@ package avro
 import (
 	"context"
 	"reflect"
-	"strconv"
 	"testing"
 	"time"
 
 	"github.com/hamba/avro/v2"
 	"github.com/ln80/event-store/event"
 )
-
-type Time time.Time
-
-func (mt Time) MarshalJSON() ([]byte, error) {
-	t := time.Time(mt)
-	return []byte(strconv.FormatInt(t.Unix()*1e3+int64(t.Nanosecond()/1e6), 10)), nil
-}
 
 func TestEventSchema(t *testing.T) {
 	ctx := context.Background()
@@ -37,7 +29,7 @@ func TestEventSchema(t *testing.T) {
 	}
 
 	type ValueObject2 struct {
-		Time Time
+		Time time.Time
 	}
 
 	type Event1 struct {
@@ -45,6 +37,7 @@ func TestEventSchema(t *testing.T) {
 		String string
 		Bool   bool
 	}
+
 	type Event2 struct {
 		Bool  bool
 		Array []string
@@ -66,6 +59,7 @@ func TestEventSchema(t *testing.T) {
 	event.NewRegister(namespace).
 		Set(&Event1{}).
 		Set(&Event2{})
+
 	sch1, err := eventSchema(a, namespace)
 	if err != nil {
 		t.Fatal(err)
@@ -105,7 +99,7 @@ func TestEventSchema(t *testing.T) {
 	}
 	defEventB := EventB{
 		ValueObject2: ValueObject2{
-			Time: Time(time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC)),
+			Time: time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC),
 		},
 	}
 	event.NewRegister(namespace).
@@ -133,9 +127,10 @@ func TestEventSchema(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rEvt1, ok := resultEvts[0].Event().(EventA)
+	ptr1 := event.ToPtr(resultEvts[0].Event()).Ptr
+	rEvt1, ok := ptr1.(*EventA)
 	if !ok {
-		t.Fatalf("invalid event type expect %T, got %T", EventA{}, rEvt1)
+		t.Fatalf("invalid event type expect %T, got %T", EventA{}, resultEvts[0].Event())
 	}
 	if want, got := evt1.Int64, rEvt1.Int64_Changed; want != got {
 		t.Fatalf("expect %v, %v be equals", want, got)
@@ -147,7 +142,8 @@ func TestEventSchema(t *testing.T) {
 		t.Fatalf("expect %v, %v be equals", want, got)
 	}
 
-	rEvt2, ok := resultEvts[1].Event().(EventB)
+	ptr2 := event.ToPtr(resultEvts[1].Event()).Ptr
+	rEvt2, ok := ptr2.(*EventB)
 	if !ok {
 		t.Fatalf("invalid event type expect %T, got %T", EventB{}, rEvt1)
 	}

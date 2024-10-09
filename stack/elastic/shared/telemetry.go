@@ -10,7 +10,7 @@ import (
 	"github.com/aws/aws-xray-sdk-go/header"
 	"github.com/aws/aws-xray-sdk-go/xray"
 	"github.com/ln80/event-store/dynamodb"
-	"github.com/ln80/event-store/internal/logger"
+	"github.com/ln80/event-store/logger"
 )
 
 var (

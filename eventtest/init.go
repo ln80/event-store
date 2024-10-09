@@ -1,7 +1,7 @@
-package testutil
+package eventtest
 
 import (
-	"github.com/ln80/event-store/internal/logger"
+	"github.com/ln80/event-store/logger"
 )
 
 func init() {

@@ -7,8 +7,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/ln80/event-store/event/testutil"
 )
 
 func TestStream_ID(t *testing.T) {
@@ -59,10 +57,10 @@ func TestStream_ID(t *testing.T) {
 
 func TestStream_Validation(t *testing.T) {
 	events := []any{
-		&testutil.Event{
+		&Event{
 			Val: "1",
 		},
-		&testutil.Event{
+		&Event{
 			Val: "2",
 		},
 	}
@@ -147,10 +145,10 @@ func TestStream_Validation(t *testing.T) {
 
 func TestStream_Basic(t *testing.T) {
 	events := []any{
-		&testutil.Event{
+		&Event{
 			Val: "1",
 		},
-		&testutil.Event{
+		&Event{
 			Val: "2",
 		},
 	}

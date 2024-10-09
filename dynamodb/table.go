@@ -27,6 +27,58 @@ type Item struct {
 	TraceID     string `dynamodbav:"_traceID,omitempty"`
 }
 
+func StoreCreateTableInput(table string) *dynamodb.CreateTableInput {
+	return &dynamodb.CreateTableInput{
+		AttributeDefinitions: []types.AttributeDefinition{
+			{
+				AttributeName: aws.String(HashKey),
+				AttributeType: types.ScalarAttributeTypeS,
+			},
+			{
+				AttributeName: aws.String(RangeKey),
+				AttributeType: types.ScalarAttributeTypeS,
+			},
+			{
+				AttributeName: aws.String(LocalIndexRangeKey),
+				AttributeType: types.ScalarAttributeTypeS,
+			},
+		},
+		KeySchema: []types.KeySchemaElement{
+			{
+				AttributeName: aws.String(HashKey),
+				KeyType:       types.KeyTypeHash,
+			},
+			{
+				AttributeName: aws.String(RangeKey),
+				KeyType:       types.KeyTypeRange,
+			},
+		},
+		TableName:   aws.String(table),
+		BillingMode: types.BillingModePayPerRequest,
+		StreamSpecification: &types.StreamSpecification{
+			StreamEnabled:  aws.Bool(true),
+			StreamViewType: types.StreamViewTypeNewImage,
+		},
+		LocalSecondaryIndexes: []types.LocalSecondaryIndex{
+			{
+				IndexName: aws.String(LocalIndex),
+				KeySchema: []types.KeySchemaElement{
+					{
+						AttributeName: aws.String(HashKey),
+						KeyType:       types.KeyTypeHash,
+					},
+					{
+						AttributeName: aws.String(LocalIndexRangeKey),
+						KeyType:       types.KeyTypeRange,
+					},
+				},
+				Projection: &types.Projection{
+					ProjectionType: types.ProjectionTypeAll,
+				},
+			},
+		},
+	}
+}
 func CreateTable(ctx context.Context, svc AdminAPI, table string) error {
 	_, err := svc.CreateTable(ctx, &dynamodb.CreateTableInput{
 		AttributeDefinitions: []types.AttributeDefinition{

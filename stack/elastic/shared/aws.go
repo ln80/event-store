@@ -11,7 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/glue"
 	"github.com/aws/aws-sdk-go-v2/service/sns"
 	"github.com/aws/aws-xray-sdk-go/instrumentation/awsv2"
-	"github.com/ln80/event-store/internal/logger"
+	"github.com/ln80/event-store/logger"
 )
 
 func InitDynamodbClient(cfg aws.Config) *dynamodb.Client {

@@ -226,7 +226,7 @@ func (f *Adapter) GetByDefinition(ctx context.Context, schema avro.Schema) (stri
 			return "", fmt.Errorf("failed to get schema %v: %w", id, err)
 		}
 		if out.Status != types.SchemaVersionStatusAvailable {
-			return "", fmt.Errorf("failed to get schema: %v", id)
+			return "", fmt.Errorf("failed to get schema: %v (status: %s)", id, out.Status)
 		}
 	}
 

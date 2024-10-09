@@ -143,9 +143,10 @@ func (s *Store) AppendToStream(ctx context.Context, chunk sourcing.Stream, opts 
 		lastVersion = db[len(db)-1].Version()
 	}
 	firstVersion := chunk.Unwrap()[0].Version()
-	if firstVersion.After(lastVersion) && !firstVersion.Next(lastVersion) {
+	if !firstVersion.Next(lastVersion) {
+		// if firstVersion.After(lastVersion) || !firstVersion.Next(lastVersion) {
 		return event_errors.Err(
-			event.ErrAppendEventsFailed, chunk.ID().String(),
+			event.ErrAppendEventsConflict, chunk.ID().String(),
 			"invalid sequence "+lastVersion.String()+" "+firstVersion.String(),
 		)
 	}
@@ -160,7 +161,7 @@ func (s *Store) LoadStream(ctx context.Context, id event.StreamID, vrange ...eve
 
 	envs, ok := s.db[id.String()]
 	if !ok {
-		return nil, nil
+		return sourcing.NewStream(id, nil), nil
 	}
 
 	l := len(vrange)

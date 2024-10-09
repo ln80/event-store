@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/ln80/event-store/event"
-	"github.com/ln80/event-store/internal/testutil"
+	"github.com/ln80/event-store/eventtest"
 )
 
 func TestEvent(t *testing.T) {
@@ -42,7 +42,7 @@ func TestEvent(t *testing.T) {
 		gVer := event.VersionMin
 
 		evt := event.Wrap(ctx,
-			stmID, testutil.GenEvents(1),
+			stmID, eventtest.GenEvents(1),
 			event.WithNameSpace("service1"),
 			event.WithVersionIncr(ver, 1, event.VersionSeqDiffPart),
 			event.WithGlobalVersionIncr(gVer, 1, event.VersionSeqDiffPart),
@@ -58,13 +58,13 @@ func TestEvent(t *testing.T) {
 		}
 		_ = avroEvt.Event()
 
-		if want, got := evt, avroEvt; !testutil.CmpEnv(want, got) {
-			t.Fatalf("expect %s, %s  be equals", testutil.FormatEnv(want), testutil.FormatEnv(got))
+		if want, got := evt, avroEvt; !eventtest.CmpEnv(want, got) {
+			t.Fatalf("expect %s, %s  be equals", eventtest.FormatEnv(want), eventtest.FormatEnv(got))
 		}
 	})
 
 	t.Run("original", func(t *testing.T) {
-		evts := testutil.GenEvents(1)
+		evts := eventtest.GenEvents(1)
 
 		avroEvt, err := convertEvent(event.Wrap(ctx, stmID, evts, event.WithNameSpace("service1"))[0])
 		if err != nil {

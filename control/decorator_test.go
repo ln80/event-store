@@ -10,12 +10,12 @@ import (
 
 	es "github.com/ln80/event-store"
 	"github.com/ln80/event-store/event"
-	"github.com/ln80/event-store/internal/testutil"
+	"github.com/ln80/event-store/eventtest"
 	"github.com/ln80/event-store/memory"
 )
 
 func TestDecorator(t *testing.T) {
-	testutil.RegisterEvent("")
+	eventtest.RegisterEvent("")
 
 	ctx := context.Background()
 
@@ -54,7 +54,7 @@ func TestDecorator(t *testing.T) {
 
 	streamID := event.NewStreamID(event.UID().String())
 
-	evts := event.Wrap(ctx, streamID, testutil.GenEvents(10))
+	evts := event.Wrap(ctx, streamID, eventtest.GenEvents(10))
 	if want, got := ErrFeatureDisabled, store.Append(ctx, streamID, evts); !errors.Is(got, want) {
 		t.Fatalf("expect %v, %v be equals", want, got)
 	}

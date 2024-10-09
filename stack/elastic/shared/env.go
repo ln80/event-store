@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ln80/event-store/internal/logger"
+	"github.com/ln80/event-store/logger"
 )
 
 func MustGetenv(name string) string {

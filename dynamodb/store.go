@@ -12,11 +12,12 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/expression"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/ln80/aws-toolkit-go/dynamodbhelper"
 	"github.com/ln80/event-store/event"
 	event_errors "github.com/ln80/event-store/event/errors"
 	"github.com/ln80/event-store/event/sourcing"
-	"github.com/ln80/event-store/internal/logger"
 	"github.com/ln80/event-store/json"
+	"github.com/ln80/event-store/logger"
 )
 
 var (
@@ -80,9 +81,9 @@ func (s *baseStore) doAppend(ctx context.Context, id event.StreamID, ver *event.
 	}()
 	log := logger.FromContext(ctx).WithName("base")
 
-	ses, ok := SessionFrom(ctx)
+	ses, ok := dynamodbhelper.SessionFrom(ctx)
 	if !ok {
-		ses = NewSession(s.api)
+		ses = dynamodbhelper.NewSession(s.api.(*dynamodb.Client))
 	}
 	defer func() {
 		if cc := ses.ConsumedCapacity(); !cc.IsZero() {
@@ -174,7 +175,7 @@ func (s *baseStore) doAppend(ctx context.Context, id event.StreamID, ver *event.
 		// ReturnItemCollectionMetrics:         types.ReturnItemCollectionMetricsSize,
 		ReturnValuesOnConditionCheckFailure: types.ReturnValuesOnConditionCheckFailureAllOld,
 	}); err != nil {
-		if IsConditionCheckFailure(err) {
+		if dynamodbhelper.IsConditionCheckFailure(err) {
 			err = event_errors.Err(event.ErrAppendEventsConflict, id.String(), err)
 			return
 		}
@@ -183,7 +184,7 @@ func (s *baseStore) doAppend(ctx context.Context, id event.StreamID, ver *event.
 
 	if explicitTx {
 		if err = ses.CommitTx(ctx); err != nil {
-			if ok, found := IsConditionCheckFailureWithItem(err, hk, rk); ok && found {
+			if ok, found := dynamodbhelper.IsConditionCheckFailureWithItem(err, [2]string{HashKey, hk}, [2]string{RangeKey, rk}); ok && found {
 				err = event_errors.Err(event.ErrAppendEventsConflict, id.String(), err)
 				return
 			}
@@ -203,7 +204,7 @@ func (s *baseStore) doLoad(ctx context.Context, id event.StreamID, from, to stri
 
 	log := logger.FromContext(ctx).WithName("base")
 
-	cc := &consumedCapacity{}
+	cc := &dynamodbhelper.ConsumedCapacity{}
 	defer func() {
 		if !cc.IsZero() {
 			log.V(1).Info("Load events consumed capacity", "capacity", cc)
@@ -244,7 +245,7 @@ func (s *baseStore) doLoad(ctx context.Context, id event.StreamID, from, to stri
 		var out *dynamodb.QueryOutput
 		out, err = p.NextPage(ctx)
 		if out != nil {
-			addConsumedCapacity(cc, out.ConsumedCapacity)
+			dynamodbhelper.AddConsumedCapacity(cc, out.ConsumedCapacity)
 		}
 		if err != nil {
 			return
@@ -507,7 +508,7 @@ func (s *sourcingStore) previousRecordExists(ctx context.Context, id event.Strea
 	recordPrev := recordCur.Decr()
 	latest, found := s.checkpoint.latest(id)
 	if !found || recordPrev.After(latest) {
-		cc := &consumedCapacity{}
+		cc := &dynamodbhelper.ConsumedCapacity{}
 		defer func() {
 			if !cc.IsZero() {
 				log.V(1).Info("Refresh in-memory checkpoint consumed capacity", "capacity", cc)
@@ -530,7 +531,7 @@ func (s *sourcingStore) previousRecordExists(ctx context.Context, id event.Strea
 			ExpressionAttributeNames: expr.Names(),
 		})
 		if out != nil {
-			addConsumedCapacity(cc, out.ConsumedCapacity)
+			dynamodbhelper.AddConsumedCapacity(cc, out.ConsumedCapacity)
 		}
 		if err != nil {
 			return err
@@ -565,14 +566,14 @@ func (s *streamerStore) Replay(ctx context.Context, id event.StreamID, q event.S
 	}
 	defer func() {
 		if !event_errors.ErrIs(err, nil, event.ErrLoadEventFailed) {
-			err = event_errors.Err(event.ErrAppendEventsFailed, id.String(), err)
+			err = event_errors.Err(event.ErrLoadEventFailed, id.String(), err)
 			return
 		}
 	}()
 
 	q.Build()
 
-	cc := &consumedCapacity{}
+	cc := &dynamodbhelper.ConsumedCapacity{}
 	defer func() {
 		if !cc.IsZero() {
 			log.V(1).Info("Replay events consumed capacity", "capacity", cc, "query", q)
@@ -618,7 +619,7 @@ PAGE_LOOP:
 		var out *dynamodb.QueryOutput
 		out, err = p.NextPage(ctx)
 		if out != nil {
-			addConsumedCapacity(cc, out.ConsumedCapacity)
+			dynamodbhelper.AddConsumedCapacity(cc, out.ConsumedCapacity)
 		}
 		if err != nil {
 			return

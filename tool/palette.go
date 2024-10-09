@@ -2,7 +2,7 @@ package tool
 
 import (
 	avro_tool "github.com/ln80/event-store/tool/avro"
-	"github.com/ln80/event-store/tool/internal"
+	internal "github.com/ln80/event-store/tool/internal"
 )
 
 type Palette struct {
@@ -11,7 +11,7 @@ type Palette struct {
 
 func NewPalette() *Palette {
 	return &Palette{
-		printer: &internal.NoPrinter{},
+		printer: &NoPrinter{},
 	}
 }
 
@@ -19,6 +19,6 @@ func (p *Palette) SetPrinter(printer internal.TaskPrinter) {
 	p.printer = printer
 }
 
-func (p *Palette) Avro() *avro_tool.JobExecuter {
+func (p *Palette) AVRO() *avro_tool.JobExecuter {
 	return avro_tool.NewJobExecuter(p.printer)
 }

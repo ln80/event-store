@@ -46,7 +46,7 @@ func (a *Account) DepositMoney(amount int) error {
 	if amount < 0 {
 		return fmt.Errorf("invalid amount to deposit: %d", amount)
 	}
-	a.Apply(MoneyDeposited{
+	a.Apply(&MoneyDeposited{
 		AccountID: a.ID,
 		Amount:    amount,
 		At:        time.Now().Unix(),

@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/ln80/event-store/event"
-	"github.com/ln80/event-store/internal/logger"
+	"github.com/ln80/event-store/logger"
 )
 
 var (
@@ -155,9 +155,14 @@ func (e *avroEvent) SetGlobalVersion(v event.Version) event.Envelope {
 var _ event.Transformer = &avroEvent{}
 
 func (e *avroEvent) Transform(fn func(any) any) {
-	if e.Event() != nil {
-		e.fEvent = fn(e.fEvent)
+	if e.Event() == nil {
+		return
 	}
+	newEvt := fn(e.fEvent)
+	if newEvt == nil {
+		return
+	}
+	e.fEvent = newEvt
 }
 
 func (e *avroEvent) SetAVROSchemaID(id string) {

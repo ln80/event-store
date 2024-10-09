@@ -10,8 +10,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/expression"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/ln80/aws-toolkit-go/dynamodbtest"
 	"github.com/ln80/event-store/event"
-	"github.com/ln80/event-store/internal/testutil"
+	"github.com/ln80/event-store/eventtest"
 	"github.com/ln80/event-store/json"
 )
 
@@ -20,7 +21,11 @@ func TestEventIndexer(t *testing.T) {
 
 	ser := json.NewEventSerializer("")
 
-	withTable(t, dbsvc, func(table string) {
+	dynamodbtest.WithTables(t, dbsvc, dynamodbtest.TableConfig{
+		TableList: dynamodbtest.TableList(StoreCreateTableInput("table")),
+	}, func(dbsvc *dynamodb.Client, tableNames []string) {
+		table := tableNames[0]
+
 		getRecord := func(id event.StreamID) (Record, error) {
 			expr, _ := expression.
 				NewBuilder().
@@ -61,10 +66,10 @@ func TestEventIndexer(t *testing.T) {
 
 			evtAt := time.Now()
 			okEnvs_1 := event.Wrap(ctx, event.NewStreamID(globalID), []any{
-				&testutil.Event1{
+				&eventtest.Event1{
 					Val: "test content a 1",
 				},
-				&testutil.Event2{
+				&eventtest.Event2{
 					Val: "test content a 2",
 				},
 			}, func(env event.RWEnvelope) {
@@ -99,10 +104,10 @@ func TestEventIndexer(t *testing.T) {
 
 			// assert global sequence is incremented
 			okEnvs_2 := event.Wrap(ctx, event.NewStreamID(globalID), []any{
-				&testutil.Event1{
+				&eventtest.Event1{
 					Val: "test content b 1",
 				},
-				&testutil.Event2{
+				&eventtest.Event2{
 					Val: "test content b 2",
 				},
 			}, func(env event.RWEnvelope) {

@@ -38,6 +38,9 @@ func newRegistryEntry(name string, typ reflect.Type,
 	def any,
 	props registryEntryProps) registryEntry {
 
+	for typ.Kind() == reflect.Pointer {
+		typ = typ.Elem()
+	}
 	return registryEntry{name: name, typ: typ, def: def, props: props}
 }
 

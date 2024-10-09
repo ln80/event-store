@@ -10,8 +10,8 @@ import (
 	"github.com/ln80/event-store/avro"
 	"github.com/ln80/event-store/control"
 	"github.com/ln80/event-store/event"
-	"github.com/ln80/event-store/internal/logger"
 	"github.com/ln80/event-store/json"
+	"github.com/ln80/event-store/logger"
 	"github.com/ln80/event-store/sns"
 	"github.com/ln80/event-store/stack/elastic/shared"
 )

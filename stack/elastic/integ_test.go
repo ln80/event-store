@@ -20,13 +20,13 @@ import (
 	"github.com/ln80/event-store/avro"
 	"github.com/ln80/event-store/dynamodb"
 	"github.com/ln80/event-store/event"
-	"github.com/ln80/event-store/internal/logger"
-	"github.com/ln80/event-store/internal/testutil"
+	"github.com/ln80/event-store/eventtest"
+	"github.com/ln80/event-store/logger"
 	"github.com/ln80/event-store/stack/elastic/shared"
 )
 
 func init() {
-	testutil.RegisterEvent("")
+	eventtest.RegisterEvent("")
 
 	logger.SetDefault(logger.Discard())
 }
@@ -112,11 +112,11 @@ func TestIntegration(t *testing.T) {
 			})
 		})
 
-	testutil.TestEventLoggingStore(t, ctx, store)
+	eventtest.TestEventLoggingStore(t, ctx, store)
 
-	testutil.TestEventSourcingStore(t, ctx, store)
+	eventtest.TestEventSourcingStore(t, ctx, store)
 
-	testutil.TestEventStreamer(t, ctx, store, func(opt *testutil.TestEventStreamerOptions) {
+	eventtest.TestEventStreamer(t, ctx, store, func(opt *eventtest.TestEventStreamerOptions) {
 		// wait for global stream indexing (asynchronous)
 		opt.PostAppend = func(id event.StreamID) {
 			time.Sleep(1 * time.Second)
@@ -151,7 +151,7 @@ func TestIntegration(t *testing.T) {
 			if err != nil {
 				return fmt.Errorf("unmarshal received event failed: %v", err)
 			}
-			t.Logf("received evt %+v", testutil.FormatEnv(evt))
+			t.Logf("received evt %+v", eventtest.FormatEnv(evt))
 		}
 
 		return nil

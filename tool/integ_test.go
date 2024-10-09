@@ -14,7 +14,6 @@ import (
 	"github.com/ln80/event-store/avro/registry"
 	"github.com/ln80/event-store/event"
 	"github.com/ln80/event-store/tool"
-	"github.com/ln80/event-store/tool/internal"
 )
 
 func TestAvroTasks(t *testing.T) {
@@ -45,7 +44,7 @@ func TestAvroTasks(t *testing.T) {
 
 	p := tool.NewPalette()
 
-	p.SetPrinter(&internal.DefaultPrinter{Output: os.Stdout, Err: os.Stdout})
+	p.SetPrinter(&tool.DefaultPrinter{Output: os.Stdout, Err: os.Stdout})
 
 	type Event1 struct {
 		ID   string

@@ -77,10 +77,29 @@ func (p *Adapter) Persist(ctx context.Context, schema *avro.RecordSchema, opts .
 				return
 			}
 			if len(matches) > 0 {
-				sort.Strings(matches)
-				latest := matches[len(matches)-1]
+				// sort.Strings(matches)
+				// latest := matches[len(matches)-1]
 
-				var prev int64
+				// var prev int64
+				// prev, _, _, err = parseSchemaPath(latest)
+				// if err != nil {
+				// 	return
+				// }
+
+				// version = int(prev) + 1
+				var prev int64 = 0
+				var latest string = ""
+				for _, path := range matches {
+					var v int64
+					v, _, _, err = parseSchemaPath(path)
+					if err != nil {
+						return
+					}
+					if v > prev {
+						prev = v
+						latest = path
+					}
+				}
 				prev, _, _, err = parseSchemaPath(latest)
 				if err != nil {
 					return
@@ -141,7 +160,17 @@ func (f *Adapter) Get(ctx context.Context, id string) (string, error) {
 		return "", fmt.Errorf("%w: %s", registry.ErrSchemaNotFound, id)
 	}
 
-	return matches[0], nil
+	file, err := f.fs.Open(matches[0])
+	if err != nil {
+		return "", err
+	}
+
+	b, err := io.ReadAll(file)
+	if err != nil {
+		return "", err
+	}
+
+	return string(b), nil
 }
 
 // GetByDefinition implements registry.Fetcher.

@@ -3,10 +3,12 @@ package avro_tool
 import (
 	"bytes"
 	"context"
+	_ "embed"
 	"errors"
 	"fmt"
 	"go/format"
 	"html/template"
+	"runtime/debug"
 	"sort"
 	"strings"
 
@@ -16,6 +18,9 @@ import (
 	"github.com/ln80/event-store/avro/registry"
 	internal "github.com/ln80/event-store/tool/internal"
 )
+
+//go:embed output_template.tmpl
+var outputTemplate string
 
 // Avro Schema Supported tasks
 const (
@@ -63,6 +68,8 @@ type EmbedSchemasTask struct {
 
 	dest EmbedSchemasTask_EmbedDestination
 
+	initialisms []string
+
 	persister registry.Persister
 
 	walker registry.Walker
@@ -103,8 +110,8 @@ func (e *JobExecuter) GenerateSchemas(namespaces ...string) *JobExecuter {
 	return e
 }
 
-// CheckCompatibility check the compatibility of the current generated schemas against their
-// previous versions if already exist.
+// CheckCompatibility checks the compatibility of the current generated schemas against their
+// previous versions if they already exist.
 func (e *JobExecuter) CheckCompatibility(walker registry.Walker) *JobExecuter {
 	if t := internal.TaskFrom[*CheckCompatibilityTask](e.tasks); t != nil {
 		return e
@@ -118,7 +125,8 @@ func (e *JobExecuter) CheckCompatibility(walker registry.Walker) *JobExecuter {
 	return e
 }
 
-// PersistSchemas registers the current schemas version in the given registry.
+// PersistSchemas registers the current generated schemas in the given registry.
+// It uses the fetcher service to deduplicate schemas.
 func (e *JobExecuter) PersistSchemas(fetcher registry.Fetcher, persister registry.Persister) *JobExecuter {
 	if t := internal.TaskFrom[*PersistSchemasTask](e.tasks); t != nil {
 		return e
@@ -135,7 +143,7 @@ func (e *JobExecuter) PersistSchemas(fetcher registry.Fetcher, persister registr
 
 // EmbedSchemas walks through the existing schemas in the registry and fetch each version
 // then persist it in the given persister registry.
-func (e *JobExecuter) EmbedSchemas(walker registry.Walker, persister registry.Persister, out, module string) *JobExecuter {
+func (e *JobExecuter) EmbedSchemas(walker registry.Walker, persister registry.Persister, out, module string, initialisms []string) *JobExecuter {
 	if t := internal.TaskFrom[*EmbedSchemasTask](e.tasks); t != nil {
 		return e
 	}
@@ -148,6 +156,7 @@ func (e *JobExecuter) EmbedSchemas(walker registry.Walker, persister registry.Pe
 			Out:    out,
 			Module: module,
 		},
+		initialisms: initialisms,
 	}
 	e.tasks = append(e.tasks, tt)
 	return e
@@ -189,7 +198,7 @@ func (e *JobExecuter) Execute(ctx context.Context) error {
 func (e *JobExecuter) executeTask(ctx context.Context, t internal.Task) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("run task panicked: %s", r)
+			err = fmt.Errorf("run task panicked: %s \nstack: %v", r, string(debug.Stack()))
 			return
 		}
 	}()
@@ -267,7 +276,7 @@ func (tt *CheckCompatibilityTask) Run(ctx context.Context, deps ...any) error {
 		}
 
 		if err := compat.Compatible(cur, schema); err != nil {
-			return fmt.Errorf("namespace: %s, incompatible schema with version: %d", n, version)
+			return fmt.Errorf("namespace: %s, incompatible with version: %d, err: %v", n, version, err)
 		}
 
 		return nil
@@ -289,29 +298,31 @@ func (tt *PersistSchemasTask) Run(ctx context.Context, deps ...any) error {
 	if tt.persister == nil {
 		return fmt.Errorf("failed to run '%s' persister not found", tt.Name())
 	}
-	if tt.fetcher == nil {
-		return fmt.Errorf("failed to run '%s' fetcher not found", tt.Name())
-	}
 
 	schemas := deps[0].(avro.SchemaMap)
 
 	for _, s := range schemas {
-		_, err := tt.fetcher.GetByDefinition(ctx, s)
-		if err != nil {
-			if errors.Is(err, registry.ErrSchemaNotFound) {
+		if tt.fetcher != nil {
+			if _, err := tt.fetcher.GetByDefinition(ctx, s); err != nil {
+				if !errors.Is(err, registry.ErrSchemaNotFound) {
+					return err
+				}
 				if _, err := tt.persister.Persist(ctx, s.(*_avro.RecordSchema)); err != nil {
 					return err
 				}
 				continue
 			}
-			return err
+		} else {
+			if _, err := tt.persister.Persist(ctx, s.(*_avro.RecordSchema)); err != nil {
+				return err
+			}
 		}
 	}
 
 	return nil
 }
 
-func (tt *EmbedSchemasTask) Run(ctx context.Context, deps ...any) error {
+func (tt *EmbedSchemasTask) Run(ctx context.Context, _ ...any) error {
 	if tt.persister == nil {
 		return fmt.Errorf("failed to run '%s' persister not found", tt.Name())
 	}
@@ -351,7 +362,14 @@ func (tt *EmbedSchemasTask) Run(ctx context.Context, deps ...any) error {
 		dir := tt.dest.Out + "/" + namespace
 
 		// generate event types from the latest
-		g := gen.NewGenerator(schema.Namespace(), nil, gen.WithFullName(false), gen.WithEncoders(false))
+		g := gen.NewGenerator(
+			schema.Namespace(), nil,
+			gen.WithFullName(false),
+			gen.WithEncoders(false),
+			gen.WithTemplate(outputTemplate),
+			gen.WithInitialisms(tt.initialisms),
+		)
+
 		types := make([]string, 0)
 
 		schemas, err := avro.UnpackEventSchemas(schema)
@@ -376,20 +394,20 @@ func (tt *EmbedSchemasTask) Run(ctx context.Context, deps ...any) error {
 		}
 
 		// register generated types in event registry
-		data := struct {
-			PackageName string
-			Events      []string
-		}{
-			PackageName: namespace,
-			Events:      types,
-		}
-		b, err := internal.RenderCode(registerEventTmpl, data)
-		if err != nil {
-			return err
-		}
-		if err := internal.WriteToFile(dir+"/"+"init.go", b); err != nil {
-			return err
-		}
+		// data := struct {
+		// 	PackageName string
+		// 	Events      []string
+		// }{
+		// 	PackageName: namespace,
+		// 	Events:      types,
+		// }
+		// b, err := internal.RenderCode(registerEventTmpl, data)
+		// if err != nil {
+		// 	return err
+		// }
+		// if err := internal.WriteToFile(dir+"/"+"init.go", b); err != nil {
+		// 	return err
+		// }
 
 		return nil
 	})

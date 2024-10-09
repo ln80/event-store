@@ -10,8 +10,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sns"
 	"github.com/aws/aws-sdk-go-v2/service/sns/types"
 	"github.com/ln80/event-store/event"
-	"github.com/ln80/event-store/internal/logger"
 	"github.com/ln80/event-store/json"
+	"github.com/ln80/event-store/logger"
 )
 
 type PublisherConfig struct {
@@ -85,6 +85,7 @@ func (p *Publisher) publish(ctx context.Context, events []event.Envelope) error 
 		if err != nil {
 			return err
 		}
+		log.V(1).Info("Do SNS Publish", "types", evt.Type())
 		body := base64.StdEncoding.EncodeToString(msg)
 		attributes := map[string]types.MessageAttributeValue{
 			"StmID": {

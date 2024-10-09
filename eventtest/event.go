@@ -1,4 +1,4 @@
-package testutil
+package eventtest
 
 import (
 	"fmt"
@@ -31,10 +31,16 @@ const (
 type Event1 struct {
 	Val string
 }
+
+type EventEmbed struct {
+	Val string `pii:"data"`
+}
 type Event2 struct {
-	ID         string `pii:"subjectID"`
-	Val        string `pii:"data"`
-	LongText   string
+	ID       string `pii:"subjectID"`
+	Val      string `pii:"data"`
+	Embed    EventEmbed
+	LongText string `pii:"data"`
+
 	MediumText string `aliases:"Medium"`
 }
 
@@ -49,14 +55,15 @@ func GenEvents(count int) []any {
 	for i := 0; i < count; i++ {
 		var evt any
 		if i%2 == 0 {
-			evt = Event2{
-				ID:         strconv.Itoa(i),
+			evt = &Event2{
+				ID:         "id: " + strconv.Itoa(i),
 				Val:        "val " + strconv.Itoa(i),
 				LongText:   generateRandomText(100),
 				MediumText: generateRandomText(50),
+				Embed:      EventEmbed{Val: "embedded val " + strconv.Itoa(i)},
 			}
 		} else {
-			evt = Event1{"val " + strconv.Itoa(i)}
+			evt = Event1{Val: "val " + strconv.Itoa(i)}
 		}
 
 		events[i] = evt
@@ -78,13 +85,16 @@ func FormatEnv(env event.Envelope) string {
 }
 
 func CmpEnv(env1, env2 event.Envelope) bool {
-	return env1.ID() == env2.ID() &&
+	metaOK := env1.ID() == env2.ID() &&
 		env1.StreamID() == env2.StreamID() &&
 		env1.GlobalStreamID() == env2.GlobalStreamID() &&
 		env1.User() == env2.User() &&
 		env1.At().Equal(env2.At()) &&
-		env1.Version().Equal(env2.Version()) &&
-		reflect.DeepEqual(env1.Event(), env2.Event())
+		env1.Version().Equal(env2.Version())
+	if !metaOK {
+		return false
+	}
+	return reflect.DeepEqual(event.ToPtr(env1.Event()).Ptr, event.ToPtr(env2.Event()).Ptr)
 }
 
 func RegisterEvent(namespace string) event.Register {
