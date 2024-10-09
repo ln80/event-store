@@ -9,8 +9,8 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/hamba/avro/v2"
+	"github.com/ln80/event-store.elastic/glue"
 	"github.com/ln80/event-store/avro/fs"
-	"github.com/ln80/event-store/avro/glue"
 	"github.com/ln80/event-store/avro/registry"
 	"github.com/ln80/event-store/event"
 	"github.com/ln80/event-store/tool"

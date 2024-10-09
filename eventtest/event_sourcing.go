@@ -10,13 +10,15 @@ import (
 )
 
 func TestEventSourcingStore(t *testing.T, ctx context.Context, store sourcing.Store) {
+	t.Helper()
 	t.Run("event sourcing basic operations", func(t *testing.T) {
+		t.Helper()
 		streamID := event.NewStreamID(event.UID().String())
 
 		// append events to stream with invalid current version of the stream
 		stm := sourcing.Wrap(ctx, streamID, event.VersionMin, GenEvents(10))
 		if err := store.AppendToStream(ctx,
-			stm); !errors.Is(err, event.ErrAppendEventsFailed) {
+			stm); !errors.Is(err, event.ErrAppendEventsConflict) {
 			t.Fatalf("expect failed append err, got: %v", err)
 		}
 

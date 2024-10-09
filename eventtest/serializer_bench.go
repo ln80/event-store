@@ -8,12 +8,14 @@ import (
 )
 
 func BenchmarkSerializer(b *testing.B, ser event.Serializer) {
+	b.Helper()
 	ctx := context.Background()
 	stmID := event.NewStreamID("tenantID")
 
 	b.ResetTimer()
 
 	b.Run("marshal", func(b *testing.B) {
+		b.Helper()
 		dataSize := 0
 		for n := 0; n < b.N; n++ {
 			bb, err := ser.MarshalEvent(ctx, event.Wrap(ctx, stmID, GenEvents(1))[0])
@@ -33,6 +35,7 @@ func BenchmarkSerializer(b *testing.B, ser event.Serializer) {
 	})
 
 	b.Run("unmarshal", func(b *testing.B) {
+		b.Helper()
 		bb, err := ser.MarshalEvent(ctx, event.Wrap(ctx, stmID, GenEvents(1))[0])
 		if err != nil {
 			b.Fatalf("Error: %v", err)
@@ -49,6 +52,7 @@ func BenchmarkSerializer(b *testing.B, ser event.Serializer) {
 	})
 
 	b.Run("marshal batch", func(b *testing.B) {
+		b.Helper()
 		for n := 0; n < b.N; n++ {
 			_, err := ser.MarshalEventBatch(ctx, event.Wrap(ctx, stmID, GenEvents(100)))
 			if err != nil {
@@ -58,6 +62,7 @@ func BenchmarkSerializer(b *testing.B, ser event.Serializer) {
 	})
 
 	b.Run("unmarshal batch", func(b *testing.B) {
+		b.Helper()
 		bb, err := ser.MarshalEventBatch(ctx, event.Wrap(ctx, stmID, GenEvents(100)))
 		if err != nil {
 			b.Fatalf("Error: %v", err)

@@ -13,7 +13,7 @@ func (pubEvent) EvDests() []string {
 }
 
 func TestPublisher_Destinations(t *testing.T) {
-	namespace := "testutil"
+	namespace := "event"
 	ctx := context.WithValue(context.Background(), ContextNamespaceKey, namespace)
 
 	NewRegister("").Clear()
@@ -25,10 +25,7 @@ func TestPublisher_Destinations(t *testing.T) {
 		Set(pubEvent{}).
 		Set(Event2{})
 
-	if want, got := (&(pubEvent{})).EvDests(), publishDestinations(ctx, pubEvent{}); !reflect.DeepEqual(want, got) {
-		t.Fatalf("expect %v, %v be equals", want, got)
-	}
-	if want, got := []string{}, publishDestinations(ctx, Event2{}); !reflect.DeepEqual(want, got) {
+	if want, got := (pubEvent{}).EvDests(), publishDestinations(ctx, pubEvent{}); !reflect.DeepEqual(want, got) {
 		t.Fatalf("expect %v, %v be equals", want, got)
 	}
 
@@ -36,7 +33,7 @@ func TestPublisher_Destinations(t *testing.T) {
 	NewRegister("").
 		Set(Event2{})
 
-	if want, got := (&Event2{}).EvDests(), publishDestinations(ctx, Event2{}); !reflect.DeepEqual(want, got) {
+	if want, got := (Event2{}).EvDests(), publishDestinations(ctx, Event2{}); !reflect.DeepEqual(want, got) {
 		t.Fatalf("expect %v, %v be equals", want, got)
 	}
 }

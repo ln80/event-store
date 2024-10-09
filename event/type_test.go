@@ -7,7 +7,7 @@ import (
 
 func TestTypeOf(t *testing.T) {
 	t.Run("test type of", func(t *testing.T) {
-		wantT := "Event"
+		wantT := "event.Event"
 		t1, t2 := TypeOf(Event{}), TypeOf(&Event{})
 		if t1 != t2 {
 			t.Fatalf("expect %s, %s be equals", t1, t2)
@@ -20,7 +20,7 @@ func TestTypeOf(t *testing.T) {
 	t.Run("test type of with namespace", func(t *testing.T) {
 		ctx := context.Background()
 
-		wantT := "Event"
+		wantT := "event.Event"
 		t1, t2 := TypeOfWithContext(ctx, Event{}), TypeOfWithContext(ctx, &Event{})
 		if t1 != t2 {
 			t.Fatalf("expect %s, %s be equals", t1, t2)

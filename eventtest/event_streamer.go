@@ -17,6 +17,8 @@ func TestEventStreamer(t *testing.T, ctx context.Context, store interface {
 	event.Streamer
 	event.Store
 }, opts ...func(*TestEventStreamerOptions)) {
+	t.Helper()
+
 	opt := &TestEventStreamerOptions{
 		PostAppend: func(id event.StreamID) {
 		},
@@ -112,6 +114,7 @@ func TestEventStreamer(t *testing.T, ctx context.Context, store interface {
 	})
 
 	t.Run("streamer with limit", func(t *testing.T) {
+		t.Helper()
 		// get first record events
 		firstRecordEvents := make([]event.Envelope, 0)
 		q := event.StreamerQuery{
@@ -157,6 +160,7 @@ func TestEventStreamer(t *testing.T, ctx context.Context, store interface {
 	})
 
 	t.Run("streamer advanced", func(t *testing.T) {
+		t.Helper()
 
 		events := make([]event.Envelope, 0)
 		q := event.StreamerQuery{

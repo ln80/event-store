@@ -59,7 +59,7 @@ func TestRegister_GetFromGlobal(t *testing.T) {
 	type Event struct{ Val string }
 	type Event2 struct{ Val string }
 
-	namespace := "testutil"
+	namespace := "event"
 
 	// clear event registry before and after test
 	NewRegister("").Clear()
@@ -104,7 +104,7 @@ func TestRegister_GetFromGlobal(t *testing.T) {
 func TestRegister_All(t *testing.T) {
 	type Event struct{ Val string }
 
-	namespace := "testutil"
+	namespace := "event"
 
 	NewRegister("").Clear()
 	defer NewRegister("").Clear()

@@ -2,10 +2,8 @@ go 1.23.0
 
 use (
 	.
-	./stack/elastic
 	./tool
 )
 
 replace github.com/hamba/avro/v2 v2.25.0 => ../../hamba_avro
 
-replace github.com/ln80/pii v0.4.0 => ../pii

@@ -9,9 +9,11 @@ import (
 )
 
 func TestSerializer(t *testing.T, ctx context.Context, ser event.Serializer) {
+	t.Helper()
 	stmID := event.NewStreamID("tenantID")
 
 	t.Run("marshal_unmarshal single", func(t *testing.T) {
+		t.Helper()
 		evt := event.Wrap(ctx, stmID, GenEvents(1))[0]
 		b, err := ser.MarshalEvent(ctx, evt)
 		if err != nil {
@@ -38,6 +40,7 @@ func TestSerializer(t *testing.T, ctx context.Context, ser event.Serializer) {
 	})
 
 	t.Run("marshal_unmarshal batch", func(t *testing.T) {
+		t.Helper()
 		evts := event.Wrap(ctx, stmID, GenEvents(20))
 		b, err := ser.MarshalEventBatch(ctx, evts)
 		if err != nil {
