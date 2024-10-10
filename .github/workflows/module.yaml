@@ -5,17 +5,15 @@ on:
     branches: [main]
     paths:
       - '**'
-      - '!stack/**'
   pull_request:
     branches: [main]
     paths:
       - '**'
-      - '!stack/**'
 jobs:
   test:
     strategy:
       matrix:
-        go-version: [ "1.20", "1.21" ]
+        go-version: [ "1.22", "1.23" ]
     runs-on: ubuntu-latest
     
     services:

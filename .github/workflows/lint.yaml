@@ -10,12 +10,12 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        directory: [".", "stack/elastic"]
+        directory: [".", "tool"]
     steps:
       - name: Setup Go
         uses: actions/setup-go@v4
         with:
-          go-version: '^1.21.x'
+          go-version: '^1.22.x'
 
       - name: Check out code
         uses: actions/checkout@v4

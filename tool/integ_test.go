@@ -1,4 +1,4 @@
-//go:build integ
+//++go:build integ
 
 package tool_test
 
@@ -7,9 +7,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/hamba/avro/v2"
-	"github.com/ln80/event-store.elastic/glue"
 	"github.com/ln80/event-store/avro/fs"
 	"github.com/ln80/event-store/avro/registry"
 	"github.com/ln80/event-store/event"
@@ -19,22 +17,8 @@ import (
 func TestAvroTasks(t *testing.T) {
 	ctx := context.Background()
 
-	cfg, err := config.LoadDefaultConfig(
-		ctx,
-	)
-	if err != nil {
-		t.Fatal(err, "failed to load AWS config")
-	}
-
-	registryName := os.Getenv("SCHEMA_REGISTRY_NAME")
-	if registryName == "" {
-		t.Fatal(err, "'SCHEMA_REGISTRY_NAME' env var not found")
-	}
-
-	svc := glue.NewAdapter(
-		registryName,
-		glue.NewClient(cfg),
-	)
+	dir := t.TempDir()
+	svc := fs.NewAdapter(os.DirFS(dir), dir)
 
 	var (
 		walker    registry.Walker    = svc
@@ -69,9 +53,9 @@ func TestAvroTasks(t *testing.T) {
 
 	var dirPersister registry.Persister = fs.NewDirAdapter(out)
 
-	avroJob := p.Avro()
+	avroJob := p.AVRO()
 
-	err = avroJob.
+	err := avroJob.
 		// Generate current schemas based on the registered events in the event.Registry.
 		GenerateSchemas().
 		// Check the current schemas compatibility against all the previous registered versions
@@ -80,7 +64,7 @@ func TestAvroTasks(t *testing.T) {
 		PersistSchemas(fetcher, persister).
 		// Fetch all schemas versions and embed them in the code (embed.FS).
 		// Generate go types based on the latest version.
-		EmbedSchemas(walker, dirPersister, out, "").
+		EmbedSchemas(walker, dirPersister, out, "", nil).
 		// Execute the job.
 		Execute(ctx)
 
