@@ -3,11 +3,7 @@
 [![Coverage Status](https://coveralls.io/repos/github/ln80/event-store/badge.svg?branch=main)](https://coveralls.io/github/ln80/event-store?branch=main)
 ![ci status](https://github.com/ln80/event-store/actions/workflows/module.yaml/badge.svg)
 
-A **serverless-first** kit that simplifies the use of **event-sourcing** and **event-logging** patterns.
-
-It offers two main components:
-- A Go module that represents the Go library;
-- A Serverless Application that deals with events storage, indexing, and forwarding;
+A core implementation for **event-sourcing** and **event-logging** patterns.
 
 
 ### Features:
@@ -15,13 +11,10 @@ It offers two main components:
 - Push and pull-based subscription support for global streams.
 - Crypto shredding support for Personal data (PII) at the event level.
 - Strong consistent ordering for version-based streams (best-effort ordering for global streams)
+- Event versioning leveraging AVRO encoding format.
 
 
 ### Event Store Implementations:
-
-#### Elastic
-Built on top of Dynamodb, Lambda functions, and SNS topics.
-
 
 #### In-Memory
 Simplified implementation for testing purposes.
@@ -29,9 +22,8 @@ Simplified implementation for testing purposes.
 
 ### Event Encoding Formats:
 
-#### JSON
-The default encoding format; lacks support for event schema evolution.
+#### JSON:
+- The default encoding format for simplicity and ease of use. However, it does not support schema evolution, making it less suitable for systems that require long-term maintenance and backward compatibility.
 
-#### AVRO
-With a built-in AWS Glue schema registry integration, event schemas can evolve while ensuring backward compatibility in a fail-fast approach.
-
+#### AVRO:
+- A more robust encoding format that supports **schema evolution**, making it ideal for systems that need to evolve over time. **AVRO** provides efficient serialization and deserialization while ensuring backward and forward compatibility between different versions of events.
