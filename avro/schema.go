@@ -2,7 +2,6 @@ package avro
 
 import (
 	"bytes"
-	"crypto/md5"
 	"encoding/gob"
 	"encoding/hex"
 	"errors"
@@ -11,6 +10,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"golang.org/x/crypto/sha3"
 
 	sensitive "github.com/ln80/struct-sensitive"
 
@@ -592,9 +593,8 @@ func defaultFingerprintToField(ctx map[string]any) *avro.Field {
 	vv := v.([]byte)
 	slices.Sort(vv)
 
-	hasher := md5.New()
-	hasher.Write(vv)
-	fingerprint := hex.EncodeToString(hasher.Sum(nil))
+	hash := sha3.Sum256(vv)
+	fingerprint := hex.EncodeToString(hash[:])
 	fff, _ := avro.NewField("defxyz"+fingerprint, avro.NewPrimitiveSchema(avro.String, nil), avro.WithDefault(""))
 
 	return fff
@@ -609,9 +609,8 @@ func sensitiveFingerprintToField(ctx map[string]any) *avro.Field {
 	vv := v.([]string)
 	slices.Sort(vv)
 
-	hasher := md5.New()
-	hasher.Write([]byte(strings.Join(vv, ".")))
-	fingerprint := hex.EncodeToString(hasher.Sum(nil))
+	hash := sha3.Sum256([]byte(strings.Join(vv, ".")))
+	fingerprint := hex.EncodeToString(hash[:])
 	fff, _ := avro.NewField("sensitivexyz"+fingerprint, avro.NewPrimitiveSchema(avro.String, nil), avro.WithDefault(""))
 
 	return fff

@@ -73,7 +73,7 @@ func TestInteg(t *testing.T) {
 
 	// walk through schema folder and make sure we got two schema versions.
 	schemaVersionCount := 0
-	fs.NewAdapter(dirFS, dirPath).Walk(ctx, func(id string, version int64, latest bool, schema *avro.RecordSchema) error {
+	_, _ = fs.NewAdapter(dirFS, dirPath).Walk(ctx, func(id string, version int64, latest bool, schema *avro.RecordSchema) error {
 		schemaVersionCount++
 		return nil
 	})
