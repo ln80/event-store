@@ -370,14 +370,11 @@ func (tt *EmbedSchemasTask) Run(ctx context.Context, _ ...any) error {
 			gen.WithInitialisms(tt.initialisms),
 		)
 
-		types := make([]string, 0)
-
 		schemas, err := avro.UnpackEventSchemas(schema)
 		if err != nil {
 			return err
 		}
 		for _, sc := range schemas {
-			types = append(types, sc.Name())
 			g.Parse(sc)
 		}
 
@@ -392,22 +389,6 @@ func (tt *EmbedSchemasTask) Run(ctx context.Context, _ ...any) error {
 		if err := internal.WriteToFile(dir+"/"+"events.go", pretty); err != nil {
 			return err
 		}
-
-		// register generated types in event registry
-		// data := struct {
-		// 	PackageName string
-		// 	Events      []string
-		// }{
-		// 	PackageName: namespace,
-		// 	Events:      types,
-		// }
-		// b, err := internal.RenderCode(registerEventTmpl, data)
-		// if err != nil {
-		// 	return err
-		// }
-		// if err := internal.WriteToFile(dir+"/"+"init.go", b); err != nil {
-		// 	return err
-		// }
 
 		return nil
 	})
