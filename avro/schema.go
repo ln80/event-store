@@ -592,7 +592,7 @@ func defaultFingerprintToField(ctx map[string]any) *avro.Field {
 	vv := v.([]byte)
 	slices.Sort(vv)
 
-	hasher := md5.New()
+	hasher := md5.New() // #nosec G407
 	hasher.Write(vv)
 	fingerprint := hex.EncodeToString(hasher.Sum(nil))
 	fff, _ := avro.NewField("defxyz"+fingerprint, avro.NewPrimitiveSchema(avro.String, nil), avro.WithDefault(""))
@@ -609,7 +609,7 @@ func sensitiveFingerprintToField(ctx map[string]any) *avro.Field {
 	vv := v.([]string)
 	slices.Sort(vv)
 
-	hasher := md5.New()
+	hasher := md5.New() // #nosec G407
 	hasher.Write([]byte(strings.Join(vv, ".")))
 	fingerprint := hex.EncodeToString(hasher.Sum(nil))
 	fff, _ := avro.NewField("sensitivexyz"+fingerprint, avro.NewPrimitiveSchema(avro.String, nil), avro.WithDefault(""))
