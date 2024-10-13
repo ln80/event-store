@@ -11,7 +11,6 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
-	golang.org/x/crypto v0.28.0 // indirect
 	golang.org/x/sys v0.26.0 // indirect
 )
 
@@ -24,4 +23,5 @@ require (
 	github.com/ln80/struct-sensitive v0.5.0
 	github.com/modern-go/reflect2 v1.0.2
 	github.com/rs/zerolog v1.32.0
+	golang.org/x/crypto v0.28.0
 )

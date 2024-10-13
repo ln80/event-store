@@ -5,6 +5,6 @@ use (
 	./tool
 )
 
-replace github.com/hamba/avro/v2 v2.25.0 => github.com/redaLaanait/avro/v2 v2.0.0-20241010173645-22134ea33a8c
+replace github.com/hamba/avro/v2 v2.25.0 => github.com/redaLaanait/avro/v2 v2.0.0-20241011105441-57be643987de
 
 
