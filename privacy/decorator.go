@@ -159,7 +159,7 @@ func (s *Decorator) Load(ctx context.Context, id event.StreamID, trange ...time.
 }
 
 // Replay implements EventStore
-func (s *Decorator) Replay(ctx context.Context, stmID event.StreamID, f event.StreamerQuery, h event.StreamerHandler) error {
+func (s *Decorator) Replay(ctx context.Context, stmID event.StreamID, f event.StreamReplayQuery, h event.StreamReplayHandler) error {
 	p, _ := s.encryptor.Instance(stmID.GlobalID())
 	// fn := func(ctx context.Context, ptrs ...any) error {
 	// 	return p.Decrypt(ctx, ptrs...)
@@ -207,6 +207,45 @@ func (s *Decorator) Replay(ctx context.Context, stmID event.StreamID, f event.St
 	}
 
 	return s.store.Replay(ctx, stmID, f, ph)
+}
+
+// Query implements es.EventStore.
+func (s *Decorator) Query(ctx context.Context, id event.StreamID, q event.StreamQuery) (*event.StreamQueryResult, error) {
+	p, _ := s.encryptor.Instance(id.GlobalID())
+
+	result, err := s.store.Query(ctx, id, q)
+	if err != nil {
+		return nil, err
+	}
+
+	// Filter and extract events that contain PII from the result.
+	// A list of event pointers is required to decrypt PII at struct fields level.
+	evtPtrs, indexes := event.ReferenceEvents(result.Events, func(env event.Envelope) bool {
+		if _, ok := env.(event.Transformer); !ok {
+			return false
+		}
+		ok, _ := sensitive.Check(env.Event())
+		return ok
+	})
+	if err := p.Decrypt(ctx, evtPtrs...); err != nil {
+		return nil, event_errors.Err(event.ErrLoadEventFailed, id.String(), err)
+	}
+
+	for idx, index := range indexes {
+		// Nil 'Dereference' function means the original event value is already a pointer;
+		// no need to call transform.
+		if index.Dereference == nil {
+			continue
+		}
+
+		// Make sure to set the new value of the event
+		result.Events[idx].(event.Transformer).Transform(func(val any) (new any) {
+			new = index.Dereference()
+			return
+		})
+	}
+
+	return result, nil
 }
 
 // AppendToStream implements EventStore

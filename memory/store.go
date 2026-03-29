@@ -19,11 +19,18 @@ type Store struct {
 	mu          sync.RWMutex
 }
 
+// Query implements event.StreamQuerier.
+func (s *Store) Query(ctx context.Context, id event.StreamID, q event.StreamQuery) (*event.StreamQueryResult, error) {
+	// TODO: implement or not?
+	panic("unimplemented")
+}
+
 // interface safe-guards
 var (
-	_ event.Store    = &Store{}
-	_ sourcing.Store = &Store{}
-	_ event.Streamer = &Store{}
+	_ event.Store          = &Store{}
+	_ sourcing.Store       = &Store{}
+	_ event.StreamReplayer = &Store{}
+	_ event.StreamQuerier  = &Store{}
 )
 
 // NewEventStore return in-memory event store implementation
@@ -189,7 +196,7 @@ func (s *Store) LoadStream(ctx context.Context, id event.StreamID, vrange ...eve
 	return sourcing.NewStream(id, fenvs), nil
 }
 
-func (s *Store) Replay(ctx context.Context, id event.StreamID, q event.StreamerQuery, h event.StreamerHandler) error {
+func (s *Store) Replay(ctx context.Context, id event.StreamID, q event.StreamReplayQuery, h event.StreamReplayHandler) error {
 	// resolve sub streams
 	streamIDs := []string{}
 	for k := range s.db {
@@ -244,7 +251,7 @@ func (s *Store) Replay(ctx context.Context, id event.StreamID, q event.StreamerQ
 		fenvs = append(fenvs, env)
 	}
 
-	if q.Order == event.StreamerReplayOrderDESC {
+	if q.Order == event.StreamOrderDESC {
 		// slices.SortFunc(fenvs, func(a, b event.Envelope) int {
 		// 	return a.GlobalVersion().Compare(b.GlobalVersion()) * -1
 		// })
@@ -257,7 +264,7 @@ func (s *Store) Replay(ctx context.Context, id event.StreamID, q event.StreamerQ
 		// Trunc the stream based on order direction and record limit.
 		// Note that record sequences are consecutive at the integer part level
 		if q.RecordLimit > 0 {
-			if q.Order == event.StreamerReplayOrderDESC {
+			if q.Order == event.StreamOrderDESC {
 				if env.GlobalVersion().Before(fenvs[0].GlobalVersion().Drop(uint64(q.RecordLimit), 0)) {
 					break
 				}

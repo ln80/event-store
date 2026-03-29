@@ -8,18 +8,18 @@ import (
 	"github.com/ln80/event-store/event"
 )
 
-type TestEventStreamerOptions struct {
+type TestEventStreamReplayerOptions struct {
 	PostAppend       func(id event.StreamID)
 	SupportOrderDESC bool
 }
 
-func TestEventStreamer(t *testing.T, ctx context.Context, store interface {
-	event.Streamer
+func TestEventStreamReplayer(t *testing.T, ctx context.Context, store interface {
+	event.StreamReplayer
 	event.Store
-}, opts ...func(*TestEventStreamerOptions)) {
+}, opts ...func(*TestEventStreamReplayerOptions)) {
 	t.Helper()
 
-	opt := &TestEventStreamerOptions{
+	opt := &TestEventStreamReplayerOptions{
 		PostAppend: func(id event.StreamID) {
 		},
 		SupportOrderDESC: false,
@@ -61,7 +61,7 @@ func TestEventStreamer(t *testing.T, ctx context.Context, store interface {
 	t.Run("streamer basic", func(t *testing.T) {
 
 		events := make([]event.Envelope, 0)
-		q := event.StreamerQuery{}
+		q := event.StreamReplayQuery{}
 
 		if err := store.Replay(ctx, event.NewStreamID(globalID), q, handlerFunc(&events)); err != nil {
 			t.Fatalf("expect to append events, got err: %v", err)
@@ -86,8 +86,8 @@ func TestEventStreamer(t *testing.T, ctx context.Context, store interface {
 		if opt.SupportOrderDESC {
 
 			descEvents := make([]event.Envelope, 0)
-			q := event.StreamerQuery{
-				Order: event.StreamerReplayOrderDESC,
+			q := event.StreamReplayQuery{
+				Order: event.StreamOrderDESC,
 			}
 
 			if err := store.Replay(ctx, event.NewStreamID(globalID), q, handlerFunc(&descEvents)); err != nil {
@@ -117,7 +117,7 @@ func TestEventStreamer(t *testing.T, ctx context.Context, store interface {
 		t.Helper()
 		// get first record events
 		firstRecordEvents := make([]event.Envelope, 0)
-		q := event.StreamerQuery{
+		q := event.StreamReplayQuery{
 			RecordLimit: 1,
 		}
 
@@ -135,11 +135,11 @@ func TestEventStreamer(t *testing.T, ctx context.Context, store interface {
 			t.Fatalf("expect %v, %v be equals", want, got)
 		}
 
-		if q.Order == event.StreamerReplayOrderDESC {
+		if q.Order == event.StreamOrderDESC {
 			// get last record events
 			lastRecordEvents := make([]event.Envelope, 0)
-			q = event.StreamerQuery{
-				Order:       event.StreamerReplayOrderDESC,
+			q = event.StreamReplayQuery{
+				Order:       event.StreamOrderDESC,
 				RecordLimit: 1,
 			}
 
@@ -163,7 +163,7 @@ func TestEventStreamer(t *testing.T, ctx context.Context, store interface {
 		t.Helper()
 
 		events := make([]event.Envelope, 0)
-		q := event.StreamerQuery{
+		q := event.StreamReplayQuery{
 			From: event.VersionMin.Add(0, 8),
 			To:   event.VersionMin.Add(1, 2),
 		}
@@ -176,12 +176,12 @@ func TestEventStreamer(t *testing.T, ctx context.Context, store interface {
 			t.Fatalf("expect events count be %d, got %d", want, l)
 		}
 
-		if q.Order == event.StreamerReplayOrderDESC {
+		if q.Order == event.StreamOrderDESC {
 			descEvents := make([]event.Envelope, 0)
-			q := event.StreamerQuery{
+			q := event.StreamReplayQuery{
 				From:  event.VersionMin.Add(0, 8),
 				To:    event.VersionMin.Add(1, 2),
-				Order: event.StreamerReplayOrderDESC,
+				Order: event.StreamOrderDESC,
 			}
 
 			if err := store.Replay(ctx, event.NewStreamID(globalID), q, handlerFunc(&descEvents)); err != nil {

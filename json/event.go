@@ -59,6 +59,7 @@ type jsonEvent struct {
 	fEvent            any             `json:"-"`
 	FAt               int64           `json:"At"`
 	FUser             string          `json:"User,omitempty"`
+	FIPAddr           string          `json:"IPAddr,omitempty"`
 	FDests            []string        `json:"Dests,omitempty"`
 	FTTL              time.Duration   `json:"TTL,omitempty"`
 
@@ -91,7 +92,7 @@ func (e *jsonEvent) Event() any {
 		return e.fEvent
 	}
 
-	log := logger.Default().WithName("avro").
+	log := logger.Default().WithName("json").
 		WithValues(
 			"stmID", e.StreamID(),
 			"type", e.Type(),
@@ -138,6 +139,10 @@ func (e *jsonEvent) Version() event.Version {
 
 func (e *jsonEvent) User() string {
 	return e.FUser
+}
+
+func (e *jsonEvent) IPAddr() string {
+	return e.FIPAddr
 }
 
 func (e *jsonEvent) GlobalStreamID() string {

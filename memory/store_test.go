@@ -14,7 +14,7 @@ func TestEventStore(t *testing.T) {
 
 	eventtest.TestEventLoggingStore(t, ctx, NewEventStore())
 	eventtest.TestEventSourcingStore(t, ctx, NewEventStore())
-	eventtest.TestEventStreamer(t, ctx, NewEventStore(), func(opt *eventtest.TestEventStreamerOptions) {
+	eventtest.TestEventStreamReplayer(t, ctx, NewEventStore(), func(opt *eventtest.TestEventStreamReplayerOptions) {
 
 		opt.SupportOrderDESC = true
 	})

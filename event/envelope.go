@@ -18,6 +18,7 @@ type Envelope interface {
 	GlobalStreamID() string
 	GlobalVersion() Version
 	User() string
+	IPAddr() string
 	Dests() []string
 	TTL() time.Duration
 }
@@ -27,6 +28,7 @@ type RWEnvelope interface {
 	Envelope
 	SetAt(t time.Time) Envelope
 	SetUser(userID string) Envelope
+	SetIPAddr(ipAddr string) Envelope
 	SetVersion(v Version) Envelope
 	SetDests(dests []string) Envelope
 	SetTTL(ttl time.Duration) Envelope
@@ -150,8 +152,17 @@ func Wrap(ctx context.Context, stmID StreamID, events []any, opts ...EnvelopeOpt
 		}
 
 		if ctx.Value(ContextUserKey) != nil {
-			user := ctx.Value(ContextUserKey).(string)
-			env.SetUser(user)
+			user, ok := ctx.Value(ContextUserKey).(string)
+			if ok {
+				env.SetUser(user)
+			}
+		}
+
+		if ctx.Value(ContextIPAddrKey) != nil {
+			ipAddr, ok := ctx.Value(ContextIPAddrKey).(string)
+			if ok {
+				env.SetIPAddr(ipAddr)
+			}
 		}
 
 		for _, opt := range opts {
@@ -184,6 +195,7 @@ type envelope struct {
 	globalStreamID string
 	globalVersion  Version
 	user           string
+	ipAddr         string
 	dests          []string
 	ttl            time.Duration
 	namespace      string
@@ -221,6 +233,10 @@ func (e *envelope) Version() Version {
 // User implements the User method of the Envelope interface.
 func (e *envelope) User() string {
 	return e.user
+}
+
+func (e *envelope) IPAddr() string {
+	return e.ipAddr
 }
 
 // StreamID implements the StreamID method of the Envelope interface.
@@ -287,6 +303,11 @@ func (e *envelope) SetTTL(ttl time.Duration) Envelope {
 // SetNamespace implements the SetNamespace method of the RWEnvelop interface
 func (e *envelope) SetNamespace(nspace string) Envelope {
 	e.namespace = nspace
+	return e
+}
+
+func (e *envelope) SetIPAddr(ipAddr string) Envelope {
+	e.ipAddr = ipAddr
 	return e
 }
 

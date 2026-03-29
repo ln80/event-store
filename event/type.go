@@ -51,3 +51,18 @@ func TypeOfWithContext(ctx context.Context, v any) string {
 	}
 	return TypeOf(v)
 }
+
+func Of[T any](fn func(t T), v any) bool {
+	switch v := v.(type) {
+	case T:
+		fn(v)
+	case *T:
+		if v == nil {
+			return false
+		}
+		fn(*v)
+	default:
+		return false
+	}
+	return true
+}

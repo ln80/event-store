@@ -11,9 +11,14 @@ type Store interface {
 	LoadStream(ctx context.Context, id event.StreamID, vrange ...event.Version) (*Stream, error)
 }
 
-func Wrap(ctx context.Context, stmID event.StreamID, curVer event.Version, events []any) Stream {
+func Wrap(ctx context.Context, stmID event.StreamID, curVer event.Version, events []any, opts ...event.EnvelopeOption) Stream {
+
+	options := append([]event.EnvelopeOption{
+		event.WithVersionIncr(curVer.Incr(), len(events), event.VersionSeqDiffFracPart)},
+		opts...,
+	)
 	stm := NewStream(stmID, event.Stream(
-		event.Wrap(ctx, stmID, events, event.WithVersionIncr(curVer.Incr(), len(events), event.VersionSeqDiffFracPart)),
+		event.Wrap(ctx, stmID, events, options...),
 	))
 	if err := stm.Validate(); err != nil {
 		panic(err)

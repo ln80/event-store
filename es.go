@@ -20,7 +20,8 @@ import (
 type EventStore interface {
 	event.Store
 	event_sourcing.Store
-	event.Streamer
+	event.StreamReplayer
+	event.StreamQuerier
 }
 
 // SetDefaultLogger allows to override the internal default logger used by the library.

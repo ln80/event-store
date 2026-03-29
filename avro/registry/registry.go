@@ -2,8 +2,10 @@ package registry
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
 	"sync"
 
 	"github.com/hamba/avro/v2"
@@ -93,6 +95,12 @@ func New(fetcher Fetcher, persister Persister, wf WireFormatter) *Registry {
 func (r *Registry) getSchemaByDefinition(ctx context.Context, schema avro.Schema) (string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
+	b, _ := schema.FingerprintUsing(avro.CRC64Avro)
+	// if err != nil {
+	// 	return "", err
+	// }
+	log.Println("getSchemaByDefinition", schema.(*avro.RecordSchema).FullName(), hex.EncodeToString(b))
 
 	for id, entry := range r.cache {
 		if entry.schema.Fingerprint() == schema.Fingerprint() {

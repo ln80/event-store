@@ -9,4 +9,5 @@ func (c ContextKey) String() string {
 var (
 	ContextNamespaceKey = ContextKey("namespace")
 	ContextUserKey      = ContextKey("user")
+	ContextIPAddrKey    = ContextKey("ip_addr")
 )

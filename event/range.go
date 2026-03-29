@@ -16,6 +16,9 @@ func VersionRange(vers []Version) (from, to Version) {
 func TimeRange(times []time.Time) (since, until time.Time) {
 	if l := len(times); l > 1 {
 		since, until = times[0], times[1]
+		if until.IsZero() {
+			until = time.Now()
+		}
 	} else if l == 1 {
 		since, until = times[0], time.Now()
 	} else {

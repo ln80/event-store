@@ -28,7 +28,7 @@ func TestPrivacyProtectDecorator(t *testing.T) {
 	store = Decorate(store, pf)
 	eventtest.TestEventLoggingStore(t, ctx, store)
 	eventtest.TestEventSourcingStore(t, ctx, store)
-	eventtest.TestEventStreamer(t, ctx, store)
+	eventtest.TestEventStreamReplayer(t, ctx, store)
 }
 
 func BenchmarkDecorator(b *testing.B) {

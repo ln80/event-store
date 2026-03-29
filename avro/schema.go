@@ -2,8 +2,8 @@ package avro
 
 import (
 	"bytes"
-	"encoding/gob"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -557,6 +557,7 @@ func appendDefaultToFingerprint(ctx map[string]any, def any) {
 	if !ok {
 		v = make([]byte, 0)
 	}
+
 	if m, ok := def.(map[string]any); ok {
 		arr := make([][2]any, 0)
 		for k, v := range m {
@@ -569,7 +570,13 @@ func appendDefaultToFingerprint(ctx map[string]any, def any) {
 	}
 	vv := v.([]byte)
 	var buf bytes.Buffer
-	_ = gob.NewEncoder(&buf).Encode(def)
+
+	// Moving away from gob as it's not designed to produce a stable,
+	// byte-for-byte identical encoding across processes.
+	// _ = gob.NewEncoder(&buf).Encode(def)
+	// vv = append(vv, buf.Bytes()...)
+
+	_ = json.NewEncoder(&buf).Encode(def)
 	vv = append(vv, buf.Bytes()...)
 
 	ctx["def"] = vv

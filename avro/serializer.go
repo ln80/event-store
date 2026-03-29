@@ -55,6 +55,7 @@ func NewEventSerializer(ctx context.Context, r *registry.Registry, opts ...func(
 			log.Error(err, "Failed AVRO schema generation")
 			panic(err)
 		}
+
 		log.V(3).Info("Generated AVRO schema", "schema", sch.String())
 	}
 

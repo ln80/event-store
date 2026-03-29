@@ -19,15 +19,15 @@ func convertEvent(evt event.Envelope) (to *avroEvent, err error) {
 	}
 
 	to = &avroEvent{
-		FStreamID: evt.StreamID(),
-		FID:       evt.ID(),
-		FType:     evt.Type(),
-		FRawEvent: evt.Event(),
-		FAt:       evt.At().UnixNano(),
-		FUser:     evt.User(),
-		FDests:    evt.Dests(),
-		FTTL:      evt.TTL(),
-
+		FStreamID:      evt.StreamID(),
+		FID:            evt.ID(),
+		FType:          evt.Type(),
+		FRawEvent:      evt.Event(),
+		FAt:            evt.At().UnixNano(),
+		FUser:          evt.User(),
+		FIPAddr:        evt.IPAddr(),
+		FDests:         evt.Dests(),
+		FTTL:           evt.TTL(),
 		fVersion:       evt.Version(),
 		fGlobalVersion: evt.GlobalVersion(),
 	}
@@ -52,6 +52,7 @@ type avroEvent struct {
 	fEvent            any
 	FAt               int64         `avro:"At"`
 	FUser             string        `avro:"User"`
+	FIPAddr           string        `avro:"IPAddr"`
 	FDests            []string      `avro:"Dests"`
 	FTTL              time.Duration `avro:"TTL"`
 
@@ -118,6 +119,10 @@ func (e *avroEvent) Version() event.Version {
 
 func (e *avroEvent) User() string {
 	return e.FUser
+}
+
+func (e *avroEvent) IPAddr() string {
+	return e.FIPAddr
 }
 
 func (e *avroEvent) GlobalStreamID() string {
