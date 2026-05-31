@@ -7,7 +7,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/hamba/avro/v2"
+	"github.com/ln80/avro/v2"
 	"github.com/ln80/event-store/avro/fs"
 	"github.com/ln80/event-store/avro/registry"
 	"github.com/ln80/event-store/event"

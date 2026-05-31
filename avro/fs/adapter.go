@@ -14,7 +14,7 @@ import (
 	"strconv"
 	"strings"
 
-	avro "github.com/hamba/avro/v2"
+	avro "github.com/ln80/avro/v2"
 	"github.com/ln80/event-store/avro/registry"
 )
 

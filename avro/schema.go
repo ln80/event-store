@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"reflect"
 	"slices"
 	"strings"
@@ -15,7 +16,7 @@ import (
 
 	sensitive "github.com/ln80/struct-sensitive"
 
-	"github.com/hamba/avro/v2"
+	"github.com/ln80/avro/v2"
 	"github.com/ln80/event-store/event"
 	"github.com/ln80/event-store/internal/helper"
 )
@@ -65,6 +66,11 @@ func EventSchemas(a avro.API, namespaces []string) (SchemaMap, error) {
 
 		// validate the generate schema fo the namespace event envelope
 		b, _ := s.MarshalJSON()
+
+		log.Printf("---> n %s", n)
+		log.Printf("---> n %s", n)
+		log.Printf("---> n %s", n)
+		log.Printf("---> b %s", string(b))
 		if _, err = avro.ParseBytes(b); err != nil {
 			return nil, fmt.Errorf("generate invalid AVRO schema for '%s' events, err: %w", n, err)
 		}

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hamba/avro/v2"
+	"github.com/ln80/avro/v2"
 	"github.com/ln80/event-store/event"
 )
 

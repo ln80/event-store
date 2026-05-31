@@ -1,10 +1,6 @@
-go 1.23.0
+go 1.25.0
 
 use (
 	.
 	./tool
 )
-
-replace github.com/hamba/avro/v2 v2.25.0 => github.com/redaLaanait/avro/v2 v2.0.0-20241011105441-57be643987de
-
-

@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/hamba/avro/v2"
+	"github.com/ln80/avro/v2"
 	_avro "github.com/ln80/event-store/avro"
 	"github.com/ln80/event-store/avro/fs"
 	bank_v1 "github.com/ln80/event-store/avro/testdata/v1"

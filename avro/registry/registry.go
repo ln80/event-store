@@ -8,7 +8,7 @@ import (
 	"log"
 	"sync"
 
-	"github.com/hamba/avro/v2"
+	"github.com/ln80/avro/v2"
 )
 
 var (

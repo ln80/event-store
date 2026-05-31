@@ -12,8 +12,8 @@ import (
 	"sort"
 	"strings"
 
-	_avro "github.com/hamba/avro/v2"
-	"github.com/hamba/avro/v2/gen"
+	_avro "github.com/ln80/avro/v2"
+	"github.com/ln80/avro/v2/gen"
 	"github.com/ln80/event-store/avro"
 	"github.com/ln80/event-store/avro/registry"
 	internal "github.com/ln80/event-store/tool/internal"
