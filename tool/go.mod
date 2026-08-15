@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/ln80/avro/v2 v2.33.1
-	github.com/ln80/event-store v0.4.0
+	github.com/ln80/event-store v0.6.0
 )
 
 require (
