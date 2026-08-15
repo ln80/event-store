@@ -71,6 +71,7 @@ github.com/golang/protobuf v1.5.3/go.mod h1:XVQd3VNwM+JqD3oG2Ue2ip4fOMUkwXdXDdiu
 github.com/golang/snappy v0.0.4/go.mod h1:/XxbfmMg8lxefKM7IXC3fBNl/7bRcc72aCRzEWrmP2Q=
 github.com/golang/snappy v1.0.0/go.mod h1:/XxbfmMg8lxefKM7IXC3fBNl/7bRcc72aCRzEWrmP2Q=
 github.com/google/go-cmp v0.6.0/go.mod h1:17dUlkBOakJ0+DkrSSNjCkIjxS6bF9zb3elmeNGIjoY=
+github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
 github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
 github.com/jmespath/go-jmespath v0.4.0 h1:BEgLn5cpjn8UN1mAw4NjwDrS35OdebyEtFe+9YPoQUg=
 github.com/jmespath/go-jmespath v0.4.0/go.mod h1:T8mJZnbsbmF+m6zOOFylbeCJqk5+pHWvzYPziyZiYoo=
@@ -80,7 +81,9 @@ github.com/klauspost/compress v1.17.10/go.mod h1:pMDklpSncoRMuLFrf1W9Ss9KT+0rH90
 github.com/klauspost/compress v1.18.2/go.mod h1:R0h/fSBs8DE4ENlcrlib3PsXS61voFxhIs2DeRhCvJ4=
 github.com/ln80/aws-toolkit-go v0.2.0/go.mod h1:h3WTn98b+8J25zqWmVsw8rP421HvOiTw/9VbU95cSlU=
 github.com/ln80/event-store v0.0.3/go.mod h1:BwyhzKPfWegDiBOmk4OgbIWcXXbHU5YyWnWYGRH0a5I=
+github.com/ln80/event-store v0.6.0/go.mod h1:FZp004DHf/6rTAb+LLtat2Hs4Wqe+usSDmV4utSQsWE=
 github.com/ln80/pii v0.3.0/go.mod h1:9L5Wua/qUpdgHcZIKRndAlQ6it/6RYTif7HcZzzwFH4=
+github.com/ln80/privacy-engine v0.0.0-20240921175436-c37fd501bf36 h1:+kMrGtMlnaKi8LX2W/zjWpdewGNMeQbJDnbenNRJPug=
 github.com/ln80/privacy-engine v0.0.0-20240921175436-c37fd501bf36/go.mod h1:leIxX0qq1fMDw1s+fgLiiY9ZmD59HcoboTsNkR8kdfA=
 github.com/ln80/privacy-engine v0.5.0 h1:RmGCZRV50E9AOwCiFtQzfhyXynfPOXMmROkEkOlkFm0=
 github.com/ln80/privacy-engine v0.5.0/go.mod h1:qK2+dW5SmEcIY7k55PtshUM9twRkxDzECW9ySaolIxk=
