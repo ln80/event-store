@@ -7,7 +7,7 @@ import (
 )
 
 func normalizeType(t reflect.Type) (reflect.Type, string) {
-	if t.Kind() == reflect.Ptr {
+	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	return t, t.String()

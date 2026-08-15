@@ -2,6 +2,7 @@ package avro
 
 import (
 	"bytes"
+	"crypto/sha3"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -11,8 +12,6 @@ import (
 	"slices"
 	"strings"
 	"time"
-
-	"golang.org/x/crypto/sha3"
 
 	sensitive "github.com/ln80/struct-sensitive"
 

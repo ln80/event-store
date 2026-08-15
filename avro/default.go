@@ -19,7 +19,7 @@ func defaultOf(v any) (any, error) {
 	rv := reflect.ValueOf(v)
 	rt := reflect.TypeOf(v)
 
-	if rt.Kind() == reflect.Ptr {
+	if rt.Kind() == reflect.Pointer {
 		if rv.IsNil() {
 			return nil, nil
 		}

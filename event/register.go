@@ -148,7 +148,7 @@ func (r *register) Set(evt any, opts ...func(registryEntryProps)) Register {
 	name := TypeOfWithNamespace(r.namespace, evt)
 	rType, _ := resolveType(evt)
 
-	if reflect.TypeOf(evt).Kind() == reflect.Ptr {
+	if reflect.TypeOf(evt).Kind() == reflect.Pointer {
 		evt = reflect.ValueOf(evt).Elem().Interface()
 	}
 
