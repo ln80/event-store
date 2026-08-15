@@ -2,6 +2,7 @@ package avro
 
 import (
 	"bytes"
+	"crypto/sha3"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -11,8 +12,6 @@ import (
 	"slices"
 	"strings"
 	"time"
-
-	"golang.org/x/crypto/sha3"
 
 	sensitive "github.com/ln80/struct-sensitive"
 
@@ -455,6 +454,17 @@ func schemaOfStruct(t reflect.Type, avroOpts []avro.SchemaOption, cfg *schemaCon
 		//
 		// That said, default values are defined and duplicated at multiple levels.
 		fieldDef, fieldDefFound := fieldDefault(cfg.def, fieldName)
+		// Nested records under *T / []T are often resolved with cfg.def == nil, so fields
+		// would otherwise get no Avro default and break backward-compatible evolution.
+		// Fall back to the Go zero value so additive nested fields (string, []string, …)
+		// emit defaults ("" / [] / 0 / false / null for pointers).
+		if !fieldDefFound {
+			zd, err := defaultOf(reflect.Zero(f.Type).Interface())
+			if err != nil {
+				return nil, err
+			}
+			fieldDef, fieldDefFound = zd, true
+		}
 
 		// resolve field schema
 		if fieldSchema == nil {

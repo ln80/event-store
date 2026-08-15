@@ -14,12 +14,32 @@ func TestDefaultOf(t *testing.T) {
 	}
 	tcs := []tc{
 		{
+			// nil pointer → null default
+			val: func() any {
+				type T struct {
+				}
+				var p *T
+				return p
+			}(),
+			want: nil,
+		},
+		{
+			// non-nil pointer is dereferenced so Set(&Nested{...}) can seed nested defaults
+			val: func() any {
+				type T struct {
+					A string
+				}
+				return &T{A: "a"}
+			}(),
+			want: map[string]any{"A": "a"},
+		},
+		{
 			val: func() any {
 				type T struct {
 				}
 				return &T{}
 			}(),
-			want: nil,
+			want: map[string]any{},
 		},
 		{
 			val: func() any {

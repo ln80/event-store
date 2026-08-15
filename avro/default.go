@@ -13,11 +13,17 @@ var (
 )
 
 func defaultOf(v any) (any, error) {
+	if v == nil {
+		return nil, nil
+	}
 	rv := reflect.ValueOf(v)
 	rt := reflect.TypeOf(v)
 
-	if rt.Kind() == reflect.Ptr {
-		return nil, nil
+	if rt.Kind() == reflect.Pointer {
+		if rv.IsNil() {
+			return nil, nil
+		}
+		return defaultOf(rv.Elem().Interface())
 	}
 
 	switch rt.Kind() {
